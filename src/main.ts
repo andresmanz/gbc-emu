@@ -1,7 +1,11 @@
 import './style.css';
 
-document.querySelector<HTMLDivElement>('#emulator')!.innerHTML = `
-    <div>
-        This is the emulator.
-    </div>
-`;
+const appContainer = document.querySelector<HTMLDivElement>('#app');
+
+if (appContainer) {
+    appContainer.innerHTML = `
+        <div>
+            This is the emulator.
+        </div>
+    `;
+}
