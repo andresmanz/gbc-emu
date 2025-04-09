@@ -26,6 +26,7 @@ export const memoryLayout = {
  */
 export class MemoryBus {
     private rom: Rom | null = null;
+    private videoRam: Ram = new Ram(new Uint8Array(0x2000)); // 8KB of VRAM
     private workRam: Ram = new Ram(new Uint8Array(0x2000)); // 8KB of WRAM
     private functionMap: MemoryFunctionMap = new MemoryFunctionMap();
 
@@ -41,6 +42,13 @@ export class MemoryBus {
 
                 return this.rom.read(address);
             },
+        });
+
+        this.functionMap.map({
+            start: memoryLayout.videoRamStart,
+            end: memoryLayout.videoRamEnd,
+            read: this.videoRam.read,
+            write: this.videoRam.write,
         });
 
         this.functionMap.map({
