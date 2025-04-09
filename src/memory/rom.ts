@@ -1,19 +1,21 @@
-export class Rom {
-    #bytes: Uint8Array;
+import { Memory } from './memory';
 
-    constructor(size: number, bytes: Uint8Array) {
-        if (size > bytes.length) {
-            throw new Error('Size mismatch');
-        }
+export class Rom implements Memory {
+    private data: Uint8Array;
 
-        this.#bytes = bytes;
+    constructor(size: number) {
+        this.data = new Uint8Array(size);
     }
 
     read(address: number): number {
-        if (address < 0 || address >= this.#bytes.length) {
-            throw new Error('Invalid address');
+        if (address < 0 || address >= this.data.length) {
+            throw new Error(`Invalid read address ${address}`);
         }
 
-        return this.#bytes[address];
+        return this.data[address];
+    }
+
+    write(address: number, _value: number): void {
+        throw new Error(`Cannot write to ROM at address ${address}`);
     }
 }
