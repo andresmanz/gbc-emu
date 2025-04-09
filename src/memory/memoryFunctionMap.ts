@@ -29,17 +29,7 @@ export class MemoryFunctionMap {
         this.mappings.push(mapping);
     }
 
-    read(address: number): number {
-        const mapping = this.findMapping(address);
-        return mapping.read(address);
-    }
-
-    write(address: number, value: number): void {
-        const mapping = this.findMapping(address);
-        mapping.write?.(address, value);
-    }
-
-    private findMapping(address: number): MemoryFunctionMapping {
+    public findMapping(address: number): MemoryFunctionMapping {
         for (const mapping of this.mappings) {
             if (address >= mapping.start && address < mapping.end) {
                 return mapping;

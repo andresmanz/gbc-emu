@@ -1,7 +1,7 @@
 import { it, describe, expect, vi } from 'vitest';
 import { MemoryFunctionMap } from './memoryFunctionMap';
 
-it('should throw an error if mappings overlap', () => {
+it('throws an error if mappings overlap', () => {
     const memoryMap = new MemoryFunctionMap();
 
     const mapping1 = {
@@ -54,39 +54,26 @@ describe('when three valid mappings are provided', () => {
         return { memoryMap, mapping1, mapping2, mapping3 };
     }
 
-    it('should call the correct read function for each mapping', () => {
+    it('returns the correct mapping for each address', () => {
         const { memoryMap, mapping1, mapping2, mapping3 } =
             setupThreeValidMappings();
 
-        memoryMap.read(5);
-        expect(mapping1.read).toHaveBeenCalledWith(5);
+        const address1 = 5;
+        const address2 = 15;
+        const address3 = 25;
 
-        memoryMap.read(15);
-        expect(mapping2.read).toHaveBeenCalledWith(15);
-
-        memoryMap.read(25);
-        expect(mapping3.read).toHaveBeenCalledWith(25);
+        expect(memoryMap.findMapping(address1)).toEqual(mapping1);
+        expect(memoryMap.findMapping(address2)).toEqual(mapping2);
+        expect(memoryMap.findMapping(address3)).toEqual(mapping3);
     });
 
-    it('should call the correct write function for each mapping', () => {
-        const { memoryMap, mapping1, mapping3 } = setupThreeValidMappings();
-
-        memoryMap.write(5, 42);
-        expect(mapping1.write).toHaveBeenCalledWith(5, 42);
-
-        memoryMap.write(25, 42);
-        expect(mapping3.write).toHaveBeenCalledWith(25, 42);
-    });
-
-    it('should throw an error if an invalid address is read', () => {
+    it('throws an error for an invalid address', () => {
         const { memoryMap } = setupThreeValidMappings();
 
-        expect(() => memoryMap.read(35)).toThrow('Invalid address 35');
-    });
+        const invalidAddress = 35;
 
-    it('should throw an error if an invalid address is written to', () => {
-        const { memoryMap } = setupThreeValidMappings();
-
-        expect(() => memoryMap.write(35, 42)).toThrow('Invalid address 35');
+        expect(() => memoryMap.findMapping(invalidAddress)).toThrow(
+            `Invalid address ${invalidAddress}`,
+        );
     });
 });

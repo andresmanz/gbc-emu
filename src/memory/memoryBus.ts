@@ -28,10 +28,21 @@ export class MemoryBus {
     }
 
     read(address: number): number {
-        return this.functionMap.read(address);
+        const mapping = this.functionMap.findMapping(address);
+        // read with local address
+        return mapping.read(address - mapping.start);
     }
 
     write(address: number, value: number): void {
-        this.functionMap.write(address, value);
+        const mapping = this.functionMap.findMapping(address);
+
+        if (mapping.write) {
+            // write with local address
+            mapping.write(address - mapping.start, value);
+        } else {
+            throw new Error(
+                `Write operation not supported at address ${address}`,
+            );
+        }
     }
 }
