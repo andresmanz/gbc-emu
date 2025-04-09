@@ -1,6 +1,6 @@
 import { Memory } from './memory';
 
-export class Rom implements Memory {
+export class Ram implements Memory {
     private data: Uint8Array;
 
     constructor(data: Uint8Array) {
@@ -15,7 +15,11 @@ export class Rom implements Memory {
         return this.data[address];
     }
 
-    write(address: number, _value: number): void {
-        throw new Error(`Cannot write to ROM at address ${address}`);
+    write(address: number, value: number): void {
+        if (address < 0 || address >= this.data.length) {
+            throw new Error(`Invalid write address ${address}`);
+        }
+
+        this.data[address] = value;
     }
 }
