@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Cpu, R8Register, r8Registers } from './cpu';
+import { Cpu, r16Registers, R8Register, r8Registers } from './cpu';
 import { MemoryBus } from '../memory/memoryBus';
 import { Rom } from '../memory/rom';
 
@@ -365,5 +365,35 @@ describe('ld [imm16], sp', () => {
         expect(cpu.memoryBus.read(0x1234)).toBe(0x78);
         expect(cpu.memoryBus.read(0x1235)).toBe(0x56);
         expect(cpu.registers.pc).toBe(0x0103);
+    });
+});
+
+describe.for(r16Registers)('inc %s', r16 => {
+    const opcode = 0x03 + r16Registers.indexOf(r16) * 0x10;
+
+    it(`increments the value of ${r16}`, () => {
+        const romData = new Uint8Array([opcode]);
+        const cpu = setupWithRom(romData);
+        cpu.registers[r16] = 0x1234;
+
+        cpu.step();
+
+        expect(cpu.registers[r16]).toBe(0x1235);
+        expect(cpu.registers.pc).toBe(0x0101);
+    });
+});
+
+describe.for(r16Registers)('dec %s', r16 => {
+    const opcode = 0x0b + r16Registers.indexOf(r16) * 0x10;
+
+    it(`decrements the value of ${r16}`, () => {
+        const romData = new Uint8Array([opcode]);
+        const cpu = setupWithRom(romData);
+        cpu.registers[r16] = 0x1234;
+
+        cpu.step();
+
+        expect(cpu.registers[r16]).toBe(0x1233);
+        expect(cpu.registers.pc).toBe(0x0101);
     });
 });

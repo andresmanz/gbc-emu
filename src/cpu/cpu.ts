@@ -123,6 +123,24 @@ function generateOpcodeTable() {
         cpu.memoryBus.write(address + 1, (sp >> 8) & 0xff);
     });
 
+    // generate INC r16 handlers
+    for (let i = 0; i < r16Registers.length; i++) {
+        const opcode = 0x03 + i * 0x10;
+
+        table.set(opcode, cpu => {
+            cpu.registers[r16Registers[i]]++;
+        });
+    }
+
+    // generate DEC r16 handlers
+    for (let i = 0; i < r16Registers.length; i++) {
+        const opcode = 0x0b + i * 0x10;
+
+        table.set(opcode, cpu => {
+            cpu.registers[r16Registers[i]]--;
+        });
+    }
+
     // generate ADD A, r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
         const opcode = 0x80 + i;
