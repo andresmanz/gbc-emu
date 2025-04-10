@@ -77,6 +77,25 @@ function generateOpcodeTable() {
         });
     }
 
+    // generate LD [r16mem], a handlers
+    table.set(0x02, cpu =>
+        cpu.memoryBus.write(cpu.registers.bc, cpu.registers.a),
+    );
+
+    table.set(0x12, cpu =>
+        cpu.memoryBus.write(cpu.registers.de, cpu.registers.a),
+    );
+
+    table.set(0x22, cpu => {
+        cpu.memoryBus.write(cpu.registers.hl, cpu.registers.a);
+        cpu.registers.hl++;
+    });
+
+    table.set(0x32, cpu => {
+        cpu.memoryBus.write(cpu.registers.hl, cpu.registers.a);
+        cpu.registers.hl--;
+    });
+
     // generate ADD A, r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
         const opcode = 0x80 + i;

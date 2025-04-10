@@ -102,7 +102,7 @@ describe('initially', () => {
  * the CPU starts executing instructions from this address.
  */
 function setupWithRom(romData: Uint8Array) {
-    const memoryBus = new MockMemoryBus(0x100 + romData.length);
+    const memoryBus = new MockMemoryBus(0x10000);
     memoryBus.setRomData(romData);
 
     const cpu = new Cpu(memoryBus);
@@ -247,5 +247,57 @@ describe('ld r16, imm16', () => {
 
         expect(cpu.registers.sp).toBe(0x1234);
         expect(cpu.registers.pc).toBe(0x0103);
+    });
+});
+
+describe('ld [r16mem], a', () => {
+    it('loads the value of A into the memory location pointed by BC', () => {
+        const romData = new Uint8Array([0x02]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.bc = 0x1234;
+        cpu.registers.a = 0x42;
+
+        cpu.step();
+
+        expect(cpu.memoryBus.read(0x1234)).toBe(0x42);
+        expect(cpu.registers.pc).toBe(0x0101);
+    });
+
+    it('loads the value of A into the memory location pointed by DE', () => {
+        const romData = new Uint8Array([0x12]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.de = 0x5678;
+        cpu.registers.a = 0x84;
+
+        cpu.step();
+
+        expect(cpu.memoryBus.read(0x5678)).toBe(0x84);
+        expect(cpu.registers.pc).toBe(0x0101);
+    });
+
+    it('loads the value of A into the memory location pointed by HL (increment)', () => {
+        const romData = new Uint8Array([0x22]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.hl = 0x9abc;
+        cpu.registers.a = 0x99;
+
+        cpu.step();
+
+        expect(cpu.memoryBus.read(0x9abc)).toBe(0x99);
+        expect(cpu.registers.hl).toBe(0x9abd);
+        expect(cpu.registers.pc).toBe(0x0101);
+    });
+
+    it('loads the value of A into the memory location pointed by HL (decrement)', () => {
+        const romData = new Uint8Array([0x32]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.hl = 0x9abc;
+        cpu.registers.a = 0x99;
+
+        cpu.step();
+
+        expect(cpu.memoryBus.read(0x9abc)).toBe(0x99);
+        expect(cpu.registers.hl).toBe(0x9abb);
+        expect(cpu.registers.pc).toBe(0x0101);
     });
 });
