@@ -115,6 +115,14 @@ function generateOpcodeTable() {
         cpu.registers.hl--;
     });
 
+    // handle LD [imm16], sp
+    table.set(0x08, cpu => {
+        const address = cpu.readNextWord();
+        const sp = cpu.registers.sp;
+        cpu.memoryBus.write(address, sp & 0xff);
+        cpu.memoryBus.write(address + 1, (sp >> 8) & 0xff);
+    });
+
     // generate ADD A, r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
         const opcode = 0x80 + i;

@@ -353,3 +353,17 @@ describe('ld a, [r16mem]', () => {
         expect(cpu.registers.pc).toBe(0x0101);
     });
 });
+
+describe('ld [imm16], sp', () => {
+    it('loads the value of SP into the memory location pointed by the immediate 16-bit value', () => {
+        const romData = new Uint8Array([0x08, 0x34, 0x12]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.sp = 0x5678;
+
+        cpu.step();
+
+        expect(cpu.memoryBus.read(0x1234)).toBe(0x78);
+        expect(cpu.memoryBus.read(0x1235)).toBe(0x56);
+        expect(cpu.registers.pc).toBe(0x0103);
+    });
+});
