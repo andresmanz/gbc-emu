@@ -24,6 +24,14 @@ if (romInput) {
     });
 }
 
+const stepButton = document.querySelector<HTMLButtonElement>('#stepButton');
+
+if (stepButton) {
+    stepButton.addEventListener('click', () => {
+        emulator.step();
+    });
+}
+
 const appContainer = document.querySelector<HTMLDivElement>('#emulator');
 
 if (appContainer) {
