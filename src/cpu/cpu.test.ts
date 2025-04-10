@@ -301,3 +301,55 @@ describe('ld [r16mem], a', () => {
         expect(cpu.registers.pc).toBe(0x0101);
     });
 });
+
+describe('ld a, [r16mem]', () => {
+    it('loads the value from the memory location pointed by BC into A', () => {
+        const romData = new Uint8Array([0x0a]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.bc = 0x1234;
+        cpu.memoryBus.write(0x1234, 0x42);
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0x42);
+        expect(cpu.registers.pc).toBe(0x0101);
+    });
+
+    it('loads the value from the memory location pointed by DE into A', () => {
+        const romData = new Uint8Array([0x1a]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.de = 0x5678;
+        cpu.memoryBus.write(0x5678, 0x84);
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0x84);
+        expect(cpu.registers.pc).toBe(0x0101);
+    });
+
+    it('loads the value from the memory location pointed by HL into A (increment)', () => {
+        const romData = new Uint8Array([0x2a]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.hl = 0x9abc;
+        cpu.memoryBus.write(0x9abc, 0x99);
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0x99);
+        expect(cpu.registers.hl).toBe(0x9abd);
+        expect(cpu.registers.pc).toBe(0x0101);
+    });
+
+    it('loads the value from the memory location pointed by HL into A (decrement)', () => {
+        const romData = new Uint8Array([0x3a]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.hl = 0x9abc;
+        cpu.memoryBus.write(0x9abc, 0x99);
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0x99);
+        expect(cpu.registers.hl).toBe(0x9abb);
+        expect(cpu.registers.pc).toBe(0x0101);
+    });
+});
