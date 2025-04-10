@@ -189,6 +189,28 @@ function generateOpcodeTable() {
         });
     }
 
+    // generate LD r8, imm8 handlers
+    for (let i = 0; i < r8Registers.length; i++) {
+        const opcode = 0x06 + (i << 3);
+
+        table.set(opcode, cpu => {
+            const value = cpu.readNextByte();
+            cpu.setR8Value(r8Registers[i], value);
+        });
+    }
+
+    // handle RLCA
+    table.set(0x07, cpu => {
+        const a = cpu.registers.a;
+        const carry = (a & 0x80) >> 7;
+        cpu.registers.a = ((a << 1) | carry) & 0xff;
+
+        cpu.registers.zeroFlag = 0;
+        cpu.registers.subtractFlag = 0;
+        cpu.registers.halfCarryFlag = 0;
+        cpu.registers.carryFlag = carry;
+    });
+
     // generate ADD A, r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
         const opcode = 0x80 + i;

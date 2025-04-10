@@ -462,3 +462,72 @@ describe('dec r8', () => {
         });
     });
 });
+
+describe('ld r8, imm8', () => {
+    describe.for(r8Registers)('ld %s, imm8', r8 => {
+        const opcode = 0x06 + (r8Registers.indexOf(r8) << 3);
+
+        it(`loads immediate 8-bit value into ${r8}`, () => {
+            const romData = new Uint8Array([opcode, 0x42]);
+            const cpu = setupWithRom(romData);
+
+            cpu.step();
+
+            expect(cpu.getR8Value(r8)).toBe(0x42);
+            expect(cpu.registers.pc).toBe(0x0102);
+        });
+    });
+});
+
+describe('rlca', () => {
+    it('rotates A left', () => {
+        const romData = new Uint8Array([0x07]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.a = 0b00010101;
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0b00101010);
+    });
+
+    it('clears the zero flag', () => {
+        const romData = new Uint8Array([0x07]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.a = 0b00000000;
+
+        cpu.step();
+
+        expect(cpu.registers.zeroFlag).toBe(0);
+    });
+
+    it('clears the subtract flag', () => {
+        const romData = new Uint8Array([0x07]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.a = 0b00000000;
+
+        cpu.step();
+
+        expect(cpu.registers.subtractFlag).toBe(0);
+    });
+
+    it('clears the half carry flag', () => {
+        const romData = new Uint8Array([0x07]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.a = 0b00000000;
+
+        cpu.step();
+
+        expect(cpu.registers.halfCarryFlag).toBe(0);
+    });
+
+    it('sets the carry flag', () => {
+        const romData = new Uint8Array([0x07]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.a = 0b10100000;
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0b01000001);
+        expect(cpu.registers.carryFlag).toBe(1);
+    });
+});
