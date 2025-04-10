@@ -4,6 +4,8 @@ import { CpuRegisters } from './cpuRegisters';
 export const r8Registers = ['b', 'c', 'd', 'e', 'h', 'l', '[hl]', 'a'] as const;
 export type R8Register = (typeof r8Registers)[number];
 
+export const r16Registers = ['bc', 'de', 'hl', 'sp'] as const;
+
 export class Cpu {
     public memoryBus: MemoryBus;
     public registers = new CpuRegisters();
@@ -35,6 +37,12 @@ export class Cpu {
         return this.memoryBus.read(this.registers.pc++);
     }
 
+    readNextWord() {
+        const lowByte = this.readNextByte();
+        const highByte = this.readNextByte();
+        return (highByte << 8) | lowByte;
+    }
+
     getR8Value(reg: R8Register): number {
         if (reg === '[hl]') {
             return this.memoryBus.read(this.registers.hl);
@@ -58,8 +66,19 @@ function generateOpcodeTable() {
     // NOP
     table.set(0x00, () => {});
 
+    // generate LD r16, imm16 handlers
+    const r16Registers = ['bc', 'de', 'hl', 'sp'] as const;
+
+    for (let i = 0; i < r16Registers.length; i++) {
+        const opcode = 0x01 + i * 0x10;
+        table.set(opcode, cpu => {
+            const value = cpu.readNextWord();
+            cpu.registers[r16Registers[i]] = value;
+        });
+    }
+
     // generate ADD A, r8 handlers
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < r8Registers.length; i++) {
         const opcode = 0x80 + i;
 
         table.set(opcode, cpu => {

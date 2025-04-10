@@ -207,3 +207,45 @@ describe('add a, r8', () => {
         });
     });
 });
+
+describe('ld r16, imm16', () => {
+    it('loads immediate 16-bit value into BC', () => {
+        const romData = new Uint8Array([0x01, 0x34, 0x12]);
+        const cpu = setupWithRom(romData);
+
+        cpu.step();
+
+        expect(cpu.registers.bc).toBe(0x1234);
+        expect(cpu.registers.pc).toBe(0x0103);
+    });
+
+    it('loads immediate 16-bit value into DE', () => {
+        const romData = new Uint8Array([0x11, 0x34, 0x12]);
+        const cpu = setupWithRom(romData);
+
+        cpu.step();
+
+        expect(cpu.registers.de).toBe(0x1234);
+        expect(cpu.registers.pc).toBe(0x0103);
+    });
+
+    it('loads immediate 16-bit value into HL', () => {
+        const romData = new Uint8Array([0x21, 0x34, 0x12]);
+        const cpu = setupWithRom(romData);
+
+        cpu.step();
+
+        expect(cpu.registers.hl).toBe(0x1234);
+        expect(cpu.registers.pc).toBe(0x0103);
+    });
+
+    it('loads immediate 16-bit value into SP', () => {
+        const romData = new Uint8Array([0x31, 0x34, 0x12]);
+        const cpu = setupWithRom(romData);
+
+        cpu.step();
+
+        expect(cpu.registers.sp).toBe(0x1234);
+        expect(cpu.registers.pc).toBe(0x0103);
+    });
+});
