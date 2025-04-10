@@ -397,3 +397,36 @@ describe.for(r16Registers)('dec %s', r16 => {
         expect(cpu.registers.pc).toBe(0x0101);
     });
 });
+
+const r16RegistersWithoutHL = r16Registers.filter(r => r !== 'hl');
+
+describe.for(r16RegistersWithoutHL)('add hl, %s', r16 => {
+    const opcode = 0x09 + r16Registers.indexOf(r16) * 0x10;
+
+    it(`adds the value of ${r16} to HL`, () => {
+        const romData = new Uint8Array([opcode]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.hl = 0x1234;
+        cpu.registers[r16] = 0x5678;
+
+        cpu.step();
+
+        expect(cpu.registers.hl).toBe(0x68ac);
+        expect(cpu.registers.pc).toBe(0x0101);
+    });
+});
+
+describe('add hl, hl', () => {
+    const opcode = 0x29;
+
+    it('adds the value of HL to itself', () => {
+        const romData = new Uint8Array([opcode]);
+        const cpu = setupWithRom(romData);
+        cpu.registers.hl = 0x1234;
+
+        cpu.step();
+
+        expect(cpu.registers.hl).toBe(0x2468);
+        expect(cpu.registers.pc).toBe(0x0101);
+    });
+});

@@ -141,6 +141,22 @@ function generateOpcodeTable() {
         });
     }
 
+    // generate ADD HL, r16 handlers
+    for (let i = 0; i < r16Registers.length; i++) {
+        const opcode = 0x09 + i * 0x10;
+        table.set(opcode, cpu => {
+            const hl = cpu.registers.hl;
+            const value = cpu.registers[r16Registers[i]];
+            const sum = hl + value;
+            cpu.registers.hl = sum & 0xffff;
+            // update flags
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.halfCarryFlag =
+                (hl & 0x0fff) + (value & 0x0fff) > 0x0fff ? 1 : 0;
+            cpu.registers.carryFlag = sum > 0xffff ? 1 : 0;
+        });
+    }
+
     // generate ADD A, r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
         const opcode = 0x80 + i;
