@@ -157,6 +157,38 @@ function generateOpcodeTable() {
         });
     }
 
+    // generate INC r8 handlers
+    for (let i = 0; i < r8Registers.length; i++) {
+        const opcode = 0x04 + (i << 3);
+
+        table.set(opcode, cpu => {
+            const value = cpu.getR8Value(r8Registers[i]);
+            const incrementedValue = value + 1;
+            cpu.setR8Value(r8Registers[i], incrementedValue);
+
+            // update flags
+            cpu.registers.zeroFlag = incrementedValue === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.halfCarryFlag = (value & 0xf) + 1 > 0xf ? 1 : 0;
+        });
+    }
+
+    // generate DEC r8 handlers
+    for (let i = 0; i < r8Registers.length; i++) {
+        const opcode = 0x05 + (i << 3);
+
+        table.set(opcode, cpu => {
+            const value = cpu.getR8Value(r8Registers[i]);
+            const decrementedValue = value - 1;
+            cpu.setR8Value(r8Registers[i], decrementedValue);
+
+            // update flags
+            cpu.registers.zeroFlag = decrementedValue === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 1;
+            cpu.registers.halfCarryFlag = (value & 0xf) - 1 < 0 ? 1 : 0;
+        });
+    }
+
     // generate ADD A, r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
         const opcode = 0x80 + i;

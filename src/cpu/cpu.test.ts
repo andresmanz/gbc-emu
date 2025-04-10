@@ -430,3 +430,35 @@ describe('add hl, hl', () => {
         expect(cpu.registers.pc).toBe(0x0101);
     });
 });
+
+describe('inc r8', () => {
+    describe.for(r8Registers)('inc %s', r8 => {
+        const opcode = 0x04 + (r8Registers.indexOf(r8) << 3);
+
+        it(`increments the value of ${r8}`, () => {
+            const romData = new Uint8Array([opcode]);
+            const cpu = setupWithRom(romData);
+            cpu.setR8Value(r8, 0x01);
+
+            cpu.step();
+
+            expect(cpu.getR8Value(r8)).toBe(0x02);
+        });
+    });
+});
+
+describe('dec r8', () => {
+    describe.for(r8Registers)('dec %s', r8 => {
+        const opcode = 0x05 + (r8Registers.indexOf(r8) << 3);
+
+        it(`decrements the value of ${r8}`, () => {
+            const romData = new Uint8Array([opcode]);
+            const cpu = setupWithRom(romData);
+            cpu.setR8Value(r8, 0x02);
+
+            cpu.step();
+
+            expect(cpu.getR8Value(r8)).toBe(0x01);
+        });
+    });
+});
