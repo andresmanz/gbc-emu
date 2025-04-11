@@ -1063,3 +1063,45 @@ describe('ld r8, r8', () => {
         });
     });
 });
+
+describe('ei', () => {
+    it('does not enable interrupts immediately', () => {
+        const romData = new Uint8Array([Opcode.EI]);
+        const cpu = setupWithRom(romData);
+
+        cpu.step();
+
+        expect(cpu.areInterruptsEnabled).toBe(false);
+    });
+
+    it('enables interrupts after the next instruction', () => {
+        const romData = new Uint8Array([Opcode.EI, Opcode.NOP]);
+        const cpu = setupWithRom(romData);
+
+        cpu.step();
+        cpu.step();
+
+        expect(cpu.areInterruptsEnabled).toBe(true);
+    });
+});
+
+describe('di', () => {
+    it('disables interrupts immediately', () => {
+        const romData = new Uint8Array([Opcode.DI]);
+        const cpu = setupWithRom(romData);
+
+        cpu.step();
+
+        expect(cpu.areInterruptsEnabled).toBe(false);
+    });
+
+    it('cancels the EI instruction', () => {
+        const romData = new Uint8Array([Opcode.EI, Opcode.DI]);
+        const cpu = setupWithRom(romData);
+
+        cpu.step();
+        cpu.step();
+
+        expect(cpu.areInterruptsEnabled).toBe(false);
+    });
+});

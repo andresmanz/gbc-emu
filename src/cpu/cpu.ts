@@ -12,6 +12,8 @@ export class Cpu {
     public memoryBus: MemoryBus;
     public registers = new CpuRegisters();
     private opcodeTable = new Map<number, (cpu: Cpu) => void>();
+    private ime = false;
+    private enableImeAfter = 0;
 
     constructor(memoryBus: MemoryBus) {
         this.memoryBus = memoryBus;
@@ -33,6 +35,15 @@ export class Cpu {
         }
 
         operation(this);
+
+        // check if we need to enable interrupts
+        if (this.enableImeAfter > 0) {
+            this.enableImeAfter--;
+
+            if (this.enableImeAfter === 0) {
+                this.ime = true;
+            }
+        }
     }
 
     readNextByte() {
@@ -64,6 +75,19 @@ export class Cpu {
         } else {
             this.registers[reg] = value;
         }
+    }
+
+    get areInterruptsEnabled() {
+        return this.ime;
+    }
+
+    requestImeEnable() {
+        this.enableImeAfter = 2;
+    }
+
+    disableIme() {
+        this.ime = false;
+        this.enableImeAfter = 0;
     }
 }
 
@@ -368,6 +392,16 @@ function generateOpcodeTable() {
             cpu.registers.carryFlag = sum > 0xff ? 1 : 0;
         });
     }
+
+    // handle EI
+    table.set(Opcode.EI, cpu => {
+        cpu.requestImeEnable();
+    });
+
+    // handle DI
+    table.set(Opcode.DI, cpu => {
+        cpu.disableIme();
+    });
 
     return table;
 }
