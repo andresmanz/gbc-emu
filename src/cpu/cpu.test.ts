@@ -968,3 +968,70 @@ describe('ccf', () => {
         expect(cpu.registers.halfCarryFlag).toBe(0);
     });
 });
+
+describe('jr imm8', () => {
+    it('jumps to the address specified by the signed immediate value', () => {
+        const romData = new Uint8Array([Opcode.JR_imm8, 0x02]);
+        const cpu = setupWithRom(romData);
+
+        cpu.step();
+
+        expect(cpu.registers.pc).toBe(0x0104);
+    });
+
+    it('jumps to the address specified by the signed immediate value (negative offset)', () => {
+        const romData = new Uint8Array([Opcode.JR_imm8, 0xfe]);
+        const cpu = setupWithRom(romData);
+
+        cpu.step();
+
+        expect(cpu.registers.pc).toBe(0x0100);
+    });
+});
+
+describe('jr cond, imm8', () => {
+    const conditions = [
+        {
+            opcode: Opcode.JR_Z_imm8,
+            flag: 'zeroFlag' as const,
+            trueValue: 1,
+        },
+        {
+            opcode: Opcode.JR_NZ_imm8,
+            flag: 'zeroFlag' as const,
+            trueValue: 0,
+        },
+        {
+            opcode: Opcode.JR_C_imm8,
+            flag: 'carryFlag' as const,
+            trueValue: 1,
+        },
+        {
+            opcode: Opcode.JR_NC_imm8,
+            flag: 'carryFlag' as const,
+            trueValue: 0,
+        },
+    ];
+
+    describe.for(conditions)('jr %s, imm8', conditionInfo => {
+        it(`jumps to the address specified by the signed immediate value if condition is met`, () => {
+            const romData = new Uint8Array([conditionInfo.opcode, 0x02]);
+            const cpu = setupWithRom(romData);
+            cpu.registers[conditionInfo.flag] = conditionInfo.trueValue;
+
+            cpu.step();
+
+            expect(cpu.registers.pc).toBe(0x0104);
+        });
+
+        it(`does not jump to the address specified by the signed immediate value if condition is not met`, () => {
+            const romData = new Uint8Array([conditionInfo.opcode, 0x02]);
+            const cpu = setupWithRom(romData);
+            cpu.registers[conditionInfo.flag] = conditionInfo.trueValue ^ 1;
+
+            cpu.step();
+
+            expect(cpu.registers.pc).toBe(0x0102);
+        });
+    });
+});

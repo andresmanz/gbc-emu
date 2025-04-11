@@ -6,6 +6,7 @@ export const r8Registers = ['b', 'c', 'd', 'e', 'h', 'l', '[hl]', 'a'] as const;
 export type R8Register = (typeof r8Registers)[number];
 
 export const r16Registers = ['bc', 'de', 'hl', 'sp'] as const;
+export const conditions = ['NZ', 'Z', 'NC', 'C'] as const;
 
 export class Cpu {
     public memoryBus: MemoryBus;
@@ -36,6 +37,11 @@ export class Cpu {
 
     readNextByte() {
         return this.memoryBus.read(this.registers.pc++);
+    }
+
+    readNextSignedByte() {
+        const byte = this.readNextByte();
+        return byte > 0x7f ? byte - 0x100 : byte;
     }
 
     readNextWord() {
@@ -306,6 +312,32 @@ function generateOpcodeTable() {
         cpu.registers.halfCarryFlag = 0;
         cpu.registers.carryFlag = cpu.registers.carryFlag ? 0 : 1;
     });
+
+    // handle JR imm8
+    table.set(Opcode.JR_imm8, cpu => {
+        const offset = cpu.readNextSignedByte();
+        cpu.registers.pc += offset;
+    });
+
+    // generate JR cond, imm8 handlers
+    const conditionChecks = {
+        Z: (cpu: Cpu) => cpu.registers.zeroFlag === 1,
+        NZ: (cpu: Cpu) => cpu.registers.zeroFlag === 0,
+        C: (cpu: Cpu) => cpu.registers.carryFlag === 1,
+        NC: (cpu: Cpu) => cpu.registers.carryFlag === 0,
+    };
+
+    for (const condition of conditions) {
+        const opcode = Opcode[`JR_${condition}_imm8`];
+
+        table.set(opcode, cpu => {
+            const offset = cpu.readNextSignedByte();
+
+            if (conditionChecks[condition](cpu)) {
+                cpu.registers.pc += offset;
+            }
+        });
+    }
 
     // generate ADD A, r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
