@@ -212,6 +212,80 @@ function generateOpcodeTable() {
         cpu.registers.carryFlag = carry;
     });
 
+    // handle RRCA
+    table.set(Opcode.RRCA, cpu => {
+        const a = cpu.registers.a;
+        const carry = a & 0x01;
+
+        cpu.registers.a = ((a >> 1) | (carry << 7)) & 0xff;
+        cpu.registers.zeroFlag = 0;
+        cpu.registers.subtractFlag = 0;
+        cpu.registers.halfCarryFlag = 0;
+        cpu.registers.carryFlag = carry;
+    });
+
+    // handle RLA
+    table.set(Opcode.RLA, cpu => {
+        const a = cpu.registers.a;
+        const carry = cpu.registers.carryFlag;
+
+        cpu.registers.carryFlag = (a & 0x80) >> 7;
+        cpu.registers.a = ((a << 1) | carry) & 0xff;
+        cpu.registers.zeroFlag = 0;
+        cpu.registers.subtractFlag = 0;
+        cpu.registers.halfCarryFlag = 0;
+    });
+
+    // handle RRA
+    table.set(Opcode.RRA, cpu => {
+        const a = cpu.registers.a;
+        const carry = cpu.registers.carryFlag;
+
+        cpu.registers.carryFlag = a & 0x01;
+        cpu.registers.a = ((a >> 1) | (carry << 7)) & 0xff;
+        cpu.registers.zeroFlag = 0;
+        cpu.registers.subtractFlag = 0;
+        cpu.registers.halfCarryFlag = 0;
+    });
+
+    // handle DAA
+    table.set(Opcode.DAA, cpu => {
+        let a = cpu.registers.a;
+        let carry = 0;
+
+        if (cpu.registers.subtractFlag) {
+            let adjustment = 0;
+
+            if (cpu.registers.halfCarryFlag) {
+                adjustment = 0x06;
+            }
+
+            if (cpu.registers.carryFlag) {
+                adjustment |= 0x60;
+            }
+
+            a -= adjustment;
+        } else {
+            let adjustment = 0;
+
+            if (cpu.registers.halfCarryFlag || (a & 0xf) > 0x09) {
+                adjustment = 0x06;
+            }
+
+            if (cpu.registers.carryFlag || a > 0x99) {
+                adjustment |= 0x60;
+                carry = 1;
+            }
+
+            a += adjustment;
+        }
+
+        cpu.registers.a = a & 0xff;
+        cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+        cpu.registers.halfCarryFlag = 0;
+        cpu.registers.carryFlag = carry;
+    });
+
     // generate ADD A, r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
         const opcode = Opcode.ADD_A_B + i;
