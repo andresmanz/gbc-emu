@@ -884,3 +884,87 @@ describe('daa', () => {
         });
     });
 });
+
+describe('cpl', () => {
+    it('correctly complements the value of A', () => {
+        const cpu = setupWithRom(new Uint8Array([Opcode.CPL]));
+        cpu.registers.a = 0b01010101;
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0b10101010);
+    });
+
+    it('sets the subtract flag', () => {
+        const cpu = setupWithRom(new Uint8Array([Opcode.CPL]));
+
+        cpu.step();
+
+        expect(cpu.registers.subtractFlag).toBe(1);
+    });
+
+    it('sets the half carry flag', () => {
+        const cpu = setupWithRom(new Uint8Array([Opcode.CPL]));
+
+        cpu.step();
+
+        expect(cpu.registers.halfCarryFlag).toBe(1);
+    });
+});
+
+describe('scf', () => {
+    it('sets the carry flag', () => {
+        const cpu = setupWithRom(new Uint8Array([Opcode.SCF]));
+
+        cpu.step();
+
+        expect(cpu.registers.carryFlag).toBe(1);
+    });
+
+    it('clears the subtract flag', () => {
+        const cpu = setupWithRom(new Uint8Array([Opcode.SCF]));
+        cpu.registers.subtractFlag = 1;
+
+        cpu.step();
+
+        expect(cpu.registers.subtractFlag).toBe(0);
+    });
+
+    it('clears the half carry flag', () => {
+        const cpu = setupWithRom(new Uint8Array([Opcode.SCF]));
+        cpu.registers.halfCarryFlag = 1;
+
+        cpu.step();
+
+        expect(cpu.registers.halfCarryFlag).toBe(0);
+    });
+});
+
+describe('ccf', () => {
+    it('toggles the carry flag', () => {
+        const cpu = setupWithRom(new Uint8Array([Opcode.CCF]));
+        cpu.registers.carryFlag = 1;
+
+        cpu.step();
+
+        expect(cpu.registers.carryFlag).toBe(0);
+    });
+
+    it('clears the subtract flag', () => {
+        const cpu = setupWithRom(new Uint8Array([Opcode.CCF]));
+        cpu.registers.subtractFlag = 1;
+
+        cpu.step();
+
+        expect(cpu.registers.subtractFlag).toBe(0);
+    });
+
+    it('clears the half carry flag', () => {
+        const cpu = setupWithRom(new Uint8Array([Opcode.CCF]));
+        cpu.registers.halfCarryFlag = 1;
+
+        cpu.step();
+
+        expect(cpu.registers.halfCarryFlag).toBe(0);
+    });
+});

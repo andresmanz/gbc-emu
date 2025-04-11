@@ -248,7 +248,7 @@ function generateOpcodeTable() {
         cpu.registers.halfCarryFlag = 0;
     });
 
-    // handle DAA
+    // handle DAA - info: https://blog.ollien.com/posts/gb-daa/
     table.set(Opcode.DAA, cpu => {
         let a = cpu.registers.a;
         let carry = 0;
@@ -284,6 +284,27 @@ function generateOpcodeTable() {
         cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
         cpu.registers.halfCarryFlag = 0;
         cpu.registers.carryFlag = carry;
+    });
+
+    // handle CPL
+    table.set(Opcode.CPL, cpu => {
+        cpu.registers.a = ~cpu.registers.a & 0xff;
+        cpu.registers.subtractFlag = 1;
+        cpu.registers.halfCarryFlag = 1;
+    });
+
+    // handle SCF
+    table.set(Opcode.SCF, cpu => {
+        cpu.registers.subtractFlag = 0;
+        cpu.registers.halfCarryFlag = 0;
+        cpu.registers.carryFlag = 1;
+    });
+
+    // handle CCF
+    table.set(Opcode.CCF, cpu => {
+        cpu.registers.subtractFlag = 0;
+        cpu.registers.halfCarryFlag = 0;
+        cpu.registers.carryFlag = cpu.registers.carryFlag ? 0 : 1;
     });
 
     // generate ADD A, r8 handlers
