@@ -1,5 +1,6 @@
 import { MemoryBus } from '../memory/memoryBus';
 import { CpuRegisters } from './cpuRegisters';
+import { Opcode } from './opcodes';
 
 export const r8Registers = ['b', 'c', 'd', 'e', 'h', 'l', '[hl]', 'a'] as const;
 export type R8Register = (typeof r8Registers)[number];
@@ -64,59 +65,59 @@ function generateOpcodeTable() {
     const table = new Map<number, (cpu: Cpu) => void>();
 
     // NOP
-    table.set(0x00, () => {});
+    table.set(Opcode.NOP, () => {});
 
     // generate LD r16, imm16 handlers
     const r16Registers = ['bc', 'de', 'hl', 'sp'] as const;
 
     for (let i = 0; i < r16Registers.length; i++) {
-        const opcode = 0x01 + i * 0x10;
+        const opcode = Opcode.LD_BC_d16 + i * 0x10;
         table.set(opcode, cpu => {
             const value = cpu.readNextWord();
             cpu.registers[r16Registers[i]] = value;
         });
     }
 
-    // generate LD [r16mem], a handlers
-    table.set(0x02, cpu =>
+    // add LD [r16mem], a handlers
+    table.set(Opcode.LD_pBC_A, cpu =>
         cpu.memoryBus.write(cpu.registers.bc, cpu.registers.a),
     );
 
-    table.set(0x12, cpu =>
+    table.set(Opcode.LD_pDE_A, cpu =>
         cpu.memoryBus.write(cpu.registers.de, cpu.registers.a),
     );
 
-    table.set(0x22, cpu => {
+    table.set(Opcode.LD_pHLI_A, cpu => {
         cpu.memoryBus.write(cpu.registers.hl, cpu.registers.a);
         cpu.registers.hl++;
     });
 
-    table.set(0x32, cpu => {
+    table.set(Opcode.LD_pHLD_A, cpu => {
         cpu.memoryBus.write(cpu.registers.hl, cpu.registers.a);
         cpu.registers.hl--;
     });
 
     // generate LD A, [r16mem] handlers
-    table.set(0x0a, cpu => {
+    table.set(Opcode.LD_A_pBC, cpu => {
         cpu.registers.a = cpu.memoryBus.read(cpu.registers.bc);
     });
 
-    table.set(0x1a, cpu => {
+    table.set(Opcode.LD_A_pDE, cpu => {
         cpu.registers.a = cpu.memoryBus.read(cpu.registers.de);
     });
 
-    table.set(0x2a, cpu => {
+    table.set(Opcode.LD_A_pHLI, cpu => {
         cpu.registers.a = cpu.memoryBus.read(cpu.registers.hl);
         cpu.registers.hl++;
     });
 
-    table.set(0x3a, cpu => {
+    table.set(Opcode.LD_A_pHLD, cpu => {
         cpu.registers.a = cpu.memoryBus.read(cpu.registers.hl);
         cpu.registers.hl--;
     });
 
     // handle LD [imm16], sp
-    table.set(0x08, cpu => {
+    table.set(Opcode.LD_a16_SP, cpu => {
         const address = cpu.readNextWord();
         const sp = cpu.registers.sp;
         cpu.memoryBus.write(address, sp & 0xff);
@@ -125,7 +126,7 @@ function generateOpcodeTable() {
 
     // generate INC r16 handlers
     for (let i = 0; i < r16Registers.length; i++) {
-        const opcode = 0x03 + i * 0x10;
+        const opcode = Opcode.INC_BC + i * 0x10;
 
         table.set(opcode, cpu => {
             cpu.registers[r16Registers[i]]++;
@@ -134,7 +135,7 @@ function generateOpcodeTable() {
 
     // generate DEC r16 handlers
     for (let i = 0; i < r16Registers.length; i++) {
-        const opcode = 0x0b + i * 0x10;
+        const opcode = Opcode.DEC_BC + i * 0x10;
 
         table.set(opcode, cpu => {
             cpu.registers[r16Registers[i]]--;
@@ -143,7 +144,7 @@ function generateOpcodeTable() {
 
     // generate ADD HL, r16 handlers
     for (let i = 0; i < r16Registers.length; i++) {
-        const opcode = 0x09 + i * 0x10;
+        const opcode = Opcode.ADD_HL_BC + i * 0x10;
         table.set(opcode, cpu => {
             const hl = cpu.registers.hl;
             const value = cpu.registers[r16Registers[i]];
@@ -159,7 +160,7 @@ function generateOpcodeTable() {
 
     // generate INC r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
-        const opcode = 0x04 + (i << 3);
+        const opcode = Opcode.INC_B + (i << 3);
 
         table.set(opcode, cpu => {
             const value = cpu.getR8Value(r8Registers[i]);
@@ -175,7 +176,7 @@ function generateOpcodeTable() {
 
     // generate DEC r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
-        const opcode = 0x05 + (i << 3);
+        const opcode = Opcode.DEC_B + (i << 3);
 
         table.set(opcode, cpu => {
             const value = cpu.getR8Value(r8Registers[i]);
@@ -191,7 +192,7 @@ function generateOpcodeTable() {
 
     // generate LD r8, imm8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
-        const opcode = 0x06 + (i << 3);
+        const opcode = Opcode.LD_B_d8 + (i << 3);
 
         table.set(opcode, cpu => {
             const value = cpu.readNextByte();
@@ -200,11 +201,11 @@ function generateOpcodeTable() {
     }
 
     // handle RLCA
-    table.set(0x07, cpu => {
+    table.set(Opcode.RLCA, cpu => {
         const a = cpu.registers.a;
         const carry = (a & 0x80) >> 7;
-        cpu.registers.a = ((a << 1) | carry) & 0xff;
 
+        cpu.registers.a = ((a << 1) | carry) & 0xff;
         cpu.registers.zeroFlag = 0;
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = 0;
@@ -213,7 +214,7 @@ function generateOpcodeTable() {
 
     // generate ADD A, r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
-        const opcode = 0x80 + i;
+        const opcode = Opcode.ADD_A_B + i;
 
         table.set(opcode, cpu => {
             const value = cpu.getR8Value(r8Registers[i]);
