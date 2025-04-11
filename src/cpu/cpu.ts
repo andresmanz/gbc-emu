@@ -339,6 +339,18 @@ function generateOpcodeTable() {
         });
     }
 
+    // generate LD r8, r8 handlers
+    for (let i = 0; i < r8Registers.length; i++) {
+        for (let j = 0; j < r8Registers.length; j++) {
+            const opcode = Opcode.LD_B_B + (i << 3) + j;
+
+            table.set(opcode, cpu => {
+                const value = cpu.getR8Value(r8Registers[j]);
+                cpu.setR8Value(r8Registers[i], value);
+            });
+        }
+    }
+
     // generate ADD A, r8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
         const opcode = Opcode.ADD_A_B + i;

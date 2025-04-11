@@ -1035,3 +1035,31 @@ describe('jr cond, imm8', () => {
         });
     });
 });
+
+describe('ld r8, r8', () => {
+    // create cross product of r8 registers
+    const r8RegisterPairs = [];
+
+    for (const r8From of r8Registers) {
+        for (const r8To of r8Registers) {
+            r8RegisterPairs.push([r8From, r8To]);
+        }
+    }
+
+    describe.for(r8RegisterPairs)('ld %s, %s', ([r8To, r8From]) => {
+        const opcode =
+            Opcode.LD_B_B +
+            (r8Registers.indexOf(r8To) << 3) +
+            r8Registers.indexOf(r8From);
+
+        it(`loads the value of ${r8From} into ${r8To}`, () => {
+            const romData = new Uint8Array([opcode]);
+            const cpu = setupWithRom(romData);
+            cpu.setR8Value(r8From, 0x42);
+
+            cpu.step();
+
+            expect(cpu.getR8Value(r8To)).toBe(0x42);
+        });
+    });
+});
