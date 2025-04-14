@@ -469,6 +469,56 @@ function generateOpcodeTable() {
         });
     }
 
+    // generate XOR A, r8 handlers
+    for (let i = 0; i < r8Registers.length; i++) {
+        const opcode = Opcode.XOR_A_B + i;
+
+        table.set(opcode, cpu => {
+            const value = cpu.getR8Value(r8Registers[i]);
+            cpu.registers.a ^= value;
+
+            // update flags
+            cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.halfCarryFlag = 0;
+            cpu.registers.carryFlag = 0;
+        });
+    }
+
+    // generate OR A, r8 handlers
+    for (let i = 0; i < r8Registers.length; i++) {
+        const opcode = Opcode.OR_A_B + i;
+
+        table.set(opcode, cpu => {
+            const value = cpu.getR8Value(r8Registers[i]);
+            cpu.registers.a |= value;
+
+            // update flags
+            cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.halfCarryFlag = 0;
+            cpu.registers.carryFlag = 0;
+        });
+    }
+
+    // generate CP A, r8 handlers
+    for (let i = 0; i < r8Registers.length; i++) {
+        const opcode = Opcode.CP_A_B + i;
+
+        table.set(opcode, cpu => {
+            const value = cpu.getR8Value(r8Registers[i]);
+            const newHalfCarryFlag =
+                (cpu.registers.a & 0xf) - (value & 0xf) < 0 ? 1 : 0;
+            const diff = cpu.registers.a - value;
+
+            // update flags
+            cpu.registers.zeroFlag = diff === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 1;
+            cpu.registers.halfCarryFlag = newHalfCarryFlag;
+            cpu.registers.carryFlag = diff < 0 ? 1 : 0;
+        });
+    }
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();
