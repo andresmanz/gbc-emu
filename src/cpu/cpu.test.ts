@@ -1068,6 +1068,16 @@ describe('add a, r8', () => {
         });
 
         testArithmeticOp({
+            description: 'sets the half carry flag when there is a half carry',
+            opcode,
+            aValue: 0x0f,
+            r8Register: r8,
+            r8Value: 0x01,
+            expectedValue: 0x10,
+            expectedFlags: { z: 0, c: 0, h: 1 },
+        });
+
+        testArithmeticOp({
             description:
                 'clears the half carry flag when there is no half carry',
             opcode,
@@ -1077,6 +1087,27 @@ describe('add a, r8', () => {
             initialFlags: { h: 1 },
             expectedValue: 0x9,
             expectedFlags: { z: 0, c: 0, h: 0 },
+        });
+
+        testArithmeticOp({
+            description: 'sets the carry flag when there is a carry',
+            opcode,
+            aValue: 0xff,
+            r8Register: r8,
+            r8Value: 0x01,
+            expectedValue: 0x00,
+            expectedFlags: { z: 1, c: 1 },
+        });
+
+        testArithmeticOp({
+            description: 'clears the carry flag when there is no carry',
+            opcode,
+            aValue: 0x01,
+            r8Register: r8,
+            r8Value: 0x01,
+            initialFlags: { c: 1 },
+            expectedValue: 0x02,
+            expectedFlags: { z: 0, c: 0 },
         });
     });
 
@@ -1203,6 +1234,18 @@ describe('adc a, r8', () => {
             expect(cpu.registers.a).toBe(0x0b);
             expect(cpu.registers.halfCarryFlag).toBe(0);
         });
+
+        it('clears the carry flag when there is no carry', () => {
+            const cpu = setupAdcTest(r8);
+            cpu.registers.a = 0x05;
+            cpu.setR8Value(r8, 0x05);
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x0b);
+            expect(cpu.registers.carryFlag).toBe(0);
+        });
     });
 
     describe('adc a, a', () => {
@@ -1214,6 +1257,119 @@ describe('adc a, r8', () => {
             cpu.step();
 
             expect(cpu.registers.a).toBe(0x05);
+        });
+    });
+});
+
+describe('sub a, r8', () => {
+    describe.for(r8RegistersWithoutA)('sub %s', r8 => {
+        const opcode = Opcode.SUB_A_B + r8Registers.indexOf(r8);
+
+        testArithmeticOp({
+            description: 'subtracts the value of the register from A',
+            opcode,
+            aValue: 0x03,
+            r8Register: r8,
+            r8Value: 0x02,
+            expectedValue: 0x01,
+        });
+
+        testArithmeticOp({
+            description:
+                'subtracts the value of the register from A with borrow',
+            opcode,
+            aValue: 0x01,
+            r8Register: r8,
+            r8Value: 0x02,
+            expectedValue: 0xff,
+            expectedFlags: { z: 0, c: 1 },
+        });
+
+        testArithmeticOp({
+            description: 'handles underflow correctly',
+            opcode,
+            aValue: 0x00,
+            r8Register: r8,
+            r8Value: 0xff,
+            expectedValue: 0x01,
+            expectedFlags: { z: 0, c: 1 },
+        });
+
+        testArithmeticOp({
+            description:
+                'sets the zero flag when result is zero after subtraction',
+            opcode,
+            aValue: 0x00,
+            r8Register: r8,
+            r8Value: 0x00,
+            expectedValue: 0x00,
+            expectedFlags: { z: 1, c: 0 },
+        });
+
+        testArithmeticOp({
+            description: 'sets the half carry flag when there is a half borrow',
+            opcode,
+            aValue: 0x10,
+            r8Register: r8,
+            r8Value: 0x08,
+            expectedValue: 0x08,
+            expectedFlags: { z: 0, c: 0, h: 1 },
+        });
+
+        testArithmeticOp({
+            description:
+                'clears the half carry flag when there is no half borrow',
+            opcode,
+            aValue: 0x09,
+            r8Register: r8,
+            r8Value: 0x01,
+            initialFlags: { h: 1 },
+            expectedValue: 0x08,
+            expectedFlags: { z: 0, c: 0, h: 0 },
+        });
+
+        testArithmeticOp({
+            description: 'sets the carry flag when there is a borrow',
+            opcode,
+            aValue: 0x00,
+            r8Register: r8,
+            r8Value: 0x01,
+            expectedValue: 0xff,
+            expectedFlags: { z: 0, c: 1 },
+        });
+
+        testArithmeticOp({
+            description: 'clears the carry flag when there is no borrow',
+            opcode,
+            aValue: 0x01,
+            r8Register: r8,
+            r8Value: 0x01,
+            initialFlags: { c: 1 },
+            expectedValue: 0x00,
+            expectedFlags: { z: 1, c: 0 },
+        });
+    });
+
+    describe('sub a, a', () => {
+        const opcode = Opcode.SUB_A_A;
+
+        testArithmeticOp({
+            description: 'subtracts the value of A from itself without borrow',
+            opcode,
+            aValue: 0x03,
+            r8Register: 'a',
+            r8Value: 0x03,
+            expectedValue: 0x00,
+        });
+
+        testArithmeticOp({
+            description: 'subtracts the value of A from itself with borrow',
+            opcode,
+            aValue: 0x01,
+            r8Register: 'a',
+            r8Value: 0x01,
+            expectedValue: 0x0,
+            expectedFlags: { z: 1, c: 0 },
         });
     });
 });
