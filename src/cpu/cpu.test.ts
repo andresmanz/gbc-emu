@@ -2360,3 +2360,89 @@ describe('or a, imm8', () => {
         expect(cpu.registers.carryFlag).toBe(0);
     });
 });
+
+describe('cp a, imm8', () => {
+    const opcode = Opcode.CP_A_imm8;
+
+    it('does not change the value of A', () => {
+        const cpu = setupWithRomData([opcode, 0x01]);
+        cpu.registers.a = 0x42;
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0x42);
+    });
+
+    it('correctly increases PC', () => {
+        const cpu = setupWithRomData([opcode, 0b10101010]);
+
+        cpu.step();
+
+        expect(cpu.registers.pc).toBe(0x0102);
+    });
+
+    it('sets the zero flag when result is zero', () => {
+        const cpu = setupWithRomData([opcode, 0b00000000]);
+        cpu.registers.a = 0b00000000;
+
+        cpu.step();
+
+        expect(cpu.registers.zeroFlag).toBe(1);
+    });
+
+    it('clears the zero flag when result is not zero', () => {
+        const cpu = setupWithRomData([opcode, 0b00000000]);
+        cpu.registers.a = 0b00000001;
+
+        cpu.step();
+
+        expect(cpu.registers.zeroFlag).toBe(0);
+    });
+
+    it('sets the subtraction flag', () => {
+        const cpu = setupWithRomData([opcode, 0b00000001]);
+        cpu.registers.subtractFlag = 0;
+
+        cpu.step();
+
+        expect(cpu.registers.subtractFlag).toBe(1);
+    });
+
+    it('sets the half carry flag when there is a half borrow', () => {
+        const cpu = setupWithRomData([opcode, 0x08]);
+        cpu.registers.a = 0x10;
+        cpu.registers.halfCarryFlag = 0;
+
+        cpu.step();
+
+        expect(cpu.registers.halfCarryFlag).toBe(1);
+    });
+
+    it('clears the half carry flag when there is no half borrow', () => {
+        const cpu = setupWithRomData([opcode, 0x01]);
+        cpu.registers.a = 0x09;
+        cpu.registers.halfCarryFlag = 1;
+
+        cpu.step();
+
+        expect(cpu.registers.halfCarryFlag).toBe(0);
+    });
+
+    it('sets the carry flag when A is less than the immediate value', () => {
+        const cpu = setupWithRomData([opcode, 0x01]);
+        cpu.registers.a = 0x00;
+
+        cpu.step();
+
+        expect(cpu.registers.carryFlag).toBe(1);
+    });
+
+    it('clears the carry flag when A is greater than or equal to the immediate value', () => {
+        const cpu = setupWithRomData([opcode, 0x01]);
+        cpu.registers.a = 0x01;
+
+        cpu.step();
+
+        expect(cpu.registers.carryFlag).toBe(0);
+    });
+});

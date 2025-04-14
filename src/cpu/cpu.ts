@@ -617,6 +617,20 @@ function generateOpcodeTable() {
         cpu.registers.carryFlag = 0;
     });
 
+    // handle CP A, imm8
+    table.set(Opcode.CP_A_imm8, cpu => {
+        const value = cpu.readNextByte();
+        const newHalfCarryFlag =
+            (cpu.registers.a & 0xf) - (value & 0xf) < 0 ? 1 : 0;
+        const diff = cpu.registers.a - value;
+
+        // update flags
+        cpu.registers.zeroFlag = diff === 0 ? 1 : 0;
+        cpu.registers.subtractFlag = 1;
+        cpu.registers.halfCarryFlag = newHalfCarryFlag;
+        cpu.registers.carryFlag = diff < 0 ? 1 : 0;
+    });
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();

@@ -268,6 +268,6 @@ export enum Opcode {
     EI = 0xfb,
     /* 0xFC: unused */ UNUSED_FC = 0xfc,
     /* 0xFD: unused */ UNUSED_FD = 0xfd,
-    CP_A_d8 = 0xfe,
+    CP_A_imm8 = 0xfe,
     RST_38H = 0xff,
 }
