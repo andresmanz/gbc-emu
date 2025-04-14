@@ -519,6 +519,37 @@ function generateOpcodeTable() {
         });
     }
 
+    // handle ADD A, imm8
+    table.set(Opcode.ADD_A_imm8, cpu => {
+        const value = cpu.readNextByte();
+        const newHalfCarryFlag =
+            (cpu.registers.a & 0xf) + (value & 0xf) > 0xf ? 1 : 0;
+        const sum = cpu.registers.a + value;
+        cpu.registers.a = sum & 0xff;
+
+        // update flags
+        cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+        cpu.registers.subtractFlag = 0;
+        cpu.registers.halfCarryFlag = newHalfCarryFlag;
+        cpu.registers.carryFlag = sum > 0xff ? 1 : 0;
+    });
+
+    // handle ADC A, imm8
+    table.set(Opcode.ADC_A_imm8, cpu => {
+        const value = cpu.readNextByte();
+        const carry = cpu.registers.carryFlag;
+        const newHalfCarryFlag =
+            (cpu.registers.a & 0xf) + (value & 0xf) + carry > 0xf ? 1 : 0;
+        const sum = cpu.registers.a + value + carry;
+        cpu.registers.a = sum & 0xff;
+
+        // update flags
+        cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+        cpu.registers.subtractFlag = 0;
+        cpu.registers.halfCarryFlag = newHalfCarryFlag;
+        cpu.registers.carryFlag = sum > 0xff ? 1 : 0;
+    });
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();

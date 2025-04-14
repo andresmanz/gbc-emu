@@ -209,7 +209,7 @@ export enum Opcode {
     JP_a16 = 0xc3,
     CALL_NZ_a16 = 0xc4,
     PUSH_BC = 0xc5,
-    ADD_A_d8 = 0xc6,
+    ADD_A_imm8 = 0xc6,
     RST_00H = 0xc7,
     RET_Z = 0xc8,
     RET = 0xc9,
@@ -217,7 +217,7 @@ export enum Opcode {
     PREFIX_CB = 0xcb,
     CALL_Z_a16 = 0xcc,
     CALL_a16 = 0xcd,
-    ADC_A_d8 = 0xce,
+    ADC_A_imm8 = 0xce,
     RST_08H = 0xcf,
 
     RET_NC = 0xd0,
