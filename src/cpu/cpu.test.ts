@@ -1488,3 +1488,61 @@ describe('sbc a, r8', () => {
         });
     });
 });
+
+describe('and a, r8', () => {
+    describe.for(r8RegistersWithoutA)('and %s', r8 => {
+        const opcode = Opcode.AND_A_B + r8Registers.indexOf(r8);
+
+        it('correctly performs a bitwise AND operation', () => {
+            const romData = new Uint8Array([opcode]);
+            const cpu = setupWithRom(romData);
+            cpu.registers.a = 0b11001100;
+            cpu.setR8Value(r8, 0b10101010);
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0b10001000);
+        });
+
+        it('sets the zero flag when result is zero', () => {
+            const romData = new Uint8Array([opcode]);
+            const cpu = setupWithRom(romData);
+            cpu.registers.a = 0b00000000;
+            cpu.setR8Value(r8, 0b00000000);
+
+            cpu.step();
+
+            expect(cpu.registers.zeroFlag).toBe(1);
+        });
+
+        it('clears the subtraction flag', () => {
+            const romData = new Uint8Array([opcode]);
+            const cpu = setupWithRom(romData);
+            cpu.registers.subtractFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.subtractFlag).toBe(0);
+        });
+
+        it('sets the half carry flag', () => {
+            const romData = new Uint8Array([opcode]);
+            const cpu = setupWithRom(romData);
+            cpu.registers.halfCarryFlag = 0;
+
+            cpu.step();
+
+            expect(cpu.registers.halfCarryFlag).toBe(1);
+        });
+
+        it('clears the carry flag', () => {
+            const romData = new Uint8Array([opcode]);
+            const cpu = setupWithRom(romData);
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.carryFlag).toBe(0);
+        });
+    });
+});

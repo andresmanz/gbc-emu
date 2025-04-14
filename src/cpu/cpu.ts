@@ -453,6 +453,22 @@ function generateOpcodeTable() {
         });
     }
 
+    // generate AND A, r8 handlers
+    for (let i = 0; i < r8Registers.length; i++) {
+        const opcode = Opcode.AND_A_B + i;
+
+        table.set(opcode, cpu => {
+            const value = cpu.getR8Value(r8Registers[i]);
+            cpu.registers.a &= value;
+
+            // update flags
+            cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.halfCarryFlag = 1;
+            cpu.registers.carryFlag = 0;
+        });
+    }
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();
