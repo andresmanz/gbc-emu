@@ -1373,3 +1373,118 @@ describe('sub a, r8', () => {
         });
     });
 });
+
+describe('sbc a, r8', () => {
+    function setupSbcTest(r8: R8Register) {
+        const opcode = Opcode.SBC_A_B + r8Registers.indexOf(r8);
+        const romData = new Uint8Array([opcode]);
+        const cpu = setupWithRom(romData);
+
+        return cpu;
+    }
+
+    describe.for(r8RegistersWithoutA)('sbc a, %s', r8 => {
+        it(`subtracts the value of ${r8} and carry from A`, () => {
+            const cpu = setupSbcTest(r8);
+            cpu.registers.a = 0x03;
+            cpu.setR8Value(r8, 0x02);
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x00);
+        });
+
+        it('sets the zero flag when result is zero', () => {
+            const cpu = setupSbcTest(r8);
+            cpu.registers.a = 0x00;
+            cpu.setR8Value(r8, 0xff);
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0);
+            expect(cpu.registers.zeroFlag).toBe(1);
+        });
+
+        it('sets the subtract flag', () => {
+            const cpu = setupSbcTest(r8);
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.a = 0x01;
+            cpu.setR8Value(r8, 0x02);
+
+            cpu.step();
+
+            expect(cpu.registers.subtractFlag).toBe(1);
+        });
+
+        it('sets the half carry flag when there is a half borrow', () => {
+            const cpu = setupSbcTest(r8);
+            cpu.registers.a = 0x10;
+            cpu.setR8Value(r8, 0x08);
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.halfCarryFlag).toBe(1);
+        });
+
+        it('clears the half carry flag when there is no half borrow', () => {
+            const cpu = setupSbcTest(r8);
+            cpu.registers.a = 0x09;
+            cpu.setR8Value(r8, 0x01);
+            cpu.registers.carryFlag = 1;
+            cpu.registers.halfCarryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x07);
+            expect(cpu.registers.halfCarryFlag).toBe(0);
+        });
+
+        it('sets the carry flag when there is a borrow', () => {
+            const cpu = setupSbcTest(r8);
+            cpu.registers.a = 0x00;
+            cpu.setR8Value(r8, 0x01);
+            cpu.registers.carryFlag = 0;
+
+            cpu.step();
+
+            expect(cpu.registers.carryFlag).toBe(1);
+        });
+
+        it('clears the carry flag when there is no borrow', () => {
+            const cpu = setupSbcTest(r8);
+            cpu.registers.a = 0x02;
+            cpu.setR8Value(r8, 0x01);
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x00);
+            expect(cpu.registers.carryFlag).toBe(0);
+        });
+    });
+
+    describe('sbc a, a', () => {
+        it('subtracts the value of A from itself without borrow', () => {
+            const cpu = setupSbcTest('a');
+            cpu.registers.a = 0x03;
+            cpu.registers.carryFlag = 0;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x00);
+        });
+
+        it('subtracts the value of A from itself with borrow', () => {
+            const cpu = setupSbcTest('a');
+            cpu.registers.a = 0x01;
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0xff);
+        });
+    });
+});

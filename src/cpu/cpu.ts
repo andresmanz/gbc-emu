@@ -433,6 +433,26 @@ function generateOpcodeTable() {
         });
     }
 
+    // generate SUB A, r8 handlers
+    for (let i = 0; i < r8Registers.length; i++) {
+        const opcode = Opcode.SBC_A_B + i;
+
+        table.set(opcode, cpu => {
+            const value = cpu.getR8Value(r8Registers[i]);
+            const carry = cpu.registers.carryFlag;
+            const newHalfCarryFlag =
+                (cpu.registers.a & 0xf) - (value & 0xf) - carry < 0 ? 1 : 0;
+            const diff = cpu.registers.a - value - carry;
+            cpu.registers.a = diff & 0xff;
+
+            // update flags
+            cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 1;
+            cpu.registers.halfCarryFlag = newHalfCarryFlag;
+            cpu.registers.carryFlag = diff < 0 ? 1 : 0;
+        });
+    }
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();
