@@ -581,6 +581,42 @@ function generateOpcodeTable() {
         cpu.registers.carryFlag = diff < 0 ? 1 : 0;
     });
 
+    // handle AND A, imm8
+    table.set(Opcode.AND_A_imm8, cpu => {
+        const value = cpu.readNextByte();
+        cpu.registers.a &= value;
+
+        // update flags
+        cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+        cpu.registers.subtractFlag = 0;
+        cpu.registers.halfCarryFlag = 1;
+        cpu.registers.carryFlag = 0;
+    });
+
+    // handle XOR A, imm8
+    table.set(Opcode.XOR_A_imm8, cpu => {
+        const value = cpu.readNextByte();
+        cpu.registers.a ^= value;
+
+        // update flags
+        cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+        cpu.registers.subtractFlag = 0;
+        cpu.registers.halfCarryFlag = 0;
+        cpu.registers.carryFlag = 0;
+    });
+
+    // handle OR A, imm8
+    table.set(Opcode.OR_A_imm8, cpu => {
+        const value = cpu.readNextByte();
+        cpu.registers.a |= value;
+
+        // update flags
+        cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+        cpu.registers.subtractFlag = 0;
+        cpu.registers.halfCarryFlag = 0;
+        cpu.registers.carryFlag = 0;
+    });
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();
