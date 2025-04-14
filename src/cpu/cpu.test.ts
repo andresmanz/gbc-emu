@@ -1545,4 +1545,18 @@ describe('and a, r8', () => {
             expect(cpu.registers.carryFlag).toBe(0);
         });
     });
+
+    describe('and a, a', () => {
+        const opcode = Opcode.AND_A_A;
+
+        it('correctly performs a bitwise AND operation', () => {
+            const romData = new Uint8Array([opcode]);
+            const cpu = setupWithRom(romData);
+            cpu.registers.a = 0b11001100;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0b11001100);
+        });
+    });
 });
