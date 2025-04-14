@@ -38,18 +38,22 @@ interface ArithmeticOpTestCase {
     aValue: number;
     r8Register: R8Register;
     r8Value: number;
-    expected: number;
-    flags?: Flags;
+    initialFlags?: Flags;
+    expectedValue: number;
+    expectedFlags?: Flags;
     description?: string;
 }
+
+const r8RegistersWithoutA = r8Registers.filter(r => r !== 'a');
 
 function testArithmeticOp({
     opcode,
     aValue,
     r8Register,
     r8Value,
-    expected,
-    flags = {},
+    initialFlags = {},
+    expectedValue,
+    expectedFlags = {},
     description,
 }: ArithmeticOpTestCase) {
     const label =
@@ -61,26 +65,30 @@ function testArithmeticOp({
         const cpu = setupWithRom(rom);
 
         cpu.registers.a = aValue;
+        cpu.registers.zeroFlag = initialFlags.z ?? 0;
+        cpu.registers.subtractFlag = initialFlags.n ?? 0;
+        cpu.registers.halfCarryFlag = initialFlags.h ?? 0;
+        cpu.registers.carryFlag = initialFlags.c ?? 0;
         cpu.setR8Value(r8Register, r8Value);
 
         cpu.step();
 
-        expect(cpu.registers.a).toBe(expected);
+        expect(cpu.registers.a).toBe(expectedValue);
 
-        if (flags.z !== undefined) {
-            expect(cpu.registers.zeroFlag).toBe(flags.z);
+        if (expectedFlags.z !== undefined) {
+            expect(cpu.registers.zeroFlag).toBe(expectedFlags.z);
         }
 
-        if (flags.n !== undefined) {
-            expect(cpu.registers.subtractFlag).toBe(flags.n);
+        if (expectedFlags.n !== undefined) {
+            expect(cpu.registers.subtractFlag).toBe(expectedFlags.n);
         }
 
-        if (flags.h !== undefined) {
-            expect(cpu.registers.halfCarryFlag).toBe(flags.h);
+        if (expectedFlags.h !== undefined) {
+            expect(cpu.registers.halfCarryFlag).toBe(expectedFlags.h);
         }
 
-        if (flags.c !== undefined) {
-            expect(cpu.registers.carryFlag).toBe(flags.c);
+        if (expectedFlags.c !== undefined) {
+            expect(cpu.registers.carryFlag).toBe(expectedFlags.c);
         }
     });
 }
@@ -117,96 +125,6 @@ it('handles nop opcode', () => {
     cpu.step();
 
     expect(cpu.registers.pc).toBe(0x0101);
-});
-
-const r8RegistersWithoutA = r8Registers.filter(r => r !== 'a');
-
-describe('add a, r8', () => {
-    describe.for(r8RegistersWithoutA)('add a, %s', r8 => {
-        const opcode = 0x80 + r8Registers.indexOf(r8);
-
-        testArithmeticOp({
-            description: 'adds the value of the register to A',
-            opcode,
-            aValue: 0x01,
-            r8Register: r8,
-            r8Value: 0x02,
-            expected: 0x03,
-        });
-
-        testArithmeticOp({
-            description: 'adds the value of the register to A with carry',
-            opcode,
-            aValue: 0xff,
-            r8Register: r8,
-            r8Value: 0x02,
-            expected: 0x01,
-            flags: { z: 0, c: 1 },
-        });
-
-        testArithmeticOp({
-            description: 'handles overflow correctly',
-            opcode,
-            aValue: 0x01,
-            r8Register: r8,
-            r8Value: 0xff,
-            expected: 0x00,
-            flags: { z: 1, c: 1 },
-        });
-
-        testArithmeticOp({
-            description: 'sets the zero flag when result is zero',
-            opcode,
-            aValue: 0x10,
-            r8Register: r8,
-            r8Value: 0xf0,
-            expected: 0x00,
-            flags: { z: 1, c: 1 },
-        });
-    });
-
-    describe('add a, a', () => {
-        const opcode = 0x87;
-
-        testArithmeticOp({
-            description: 'adds the value of A to itself',
-            opcode,
-            aValue: 0x01,
-            r8Register: 'a',
-            r8Value: 0x01,
-            expected: 0x02,
-        });
-
-        testArithmeticOp({
-            description: 'adds the value of A to itself with carry',
-            opcode,
-            aValue: 0xff,
-            r8Register: 'a',
-            r8Value: 0xff,
-            expected: 0xfe,
-            flags: { z: 0, c: 1 },
-        });
-
-        testArithmeticOp({
-            description: 'handles overflow correctly',
-            opcode,
-            aValue: 0x80,
-            r8Register: 'a',
-            r8Value: 0x80,
-            expected: 0x00,
-            flags: { z: 1, c: 1 },
-        });
-
-        testArithmeticOp({
-            description: 'sets the zero flag when result is zero',
-            opcode,
-            aValue: 0x0,
-            r8Register: 'a',
-            r8Value: 0x0,
-            expected: 0x00,
-            flags: { z: 1, c: 0 },
-        });
-    });
 });
 
 describe('ld r16, imm16', () => {
@@ -1103,5 +1021,199 @@ describe('di', () => {
         cpu.step();
 
         expect(cpu.areInterruptsEnabled).toBe(false);
+    });
+});
+
+describe('add a, r8', () => {
+    describe.for(r8RegistersWithoutA)('add a, %s', r8 => {
+        const opcode = 0x80 + r8Registers.indexOf(r8);
+
+        testArithmeticOp({
+            description: 'adds the value of the register to A',
+            opcode,
+            aValue: 0x01,
+            r8Register: r8,
+            r8Value: 0x02,
+            expectedValue: 0x03,
+        });
+
+        testArithmeticOp({
+            description: 'adds the value of the register to A with carry',
+            opcode,
+            aValue: 0xff,
+            r8Register: r8,
+            r8Value: 0x02,
+            expectedValue: 0x01,
+            expectedFlags: { z: 0, c: 1 },
+        });
+
+        testArithmeticOp({
+            description: 'handles overflow correctly',
+            opcode,
+            aValue: 0x01,
+            r8Register: r8,
+            r8Value: 0xff,
+            expectedValue: 0x00,
+            expectedFlags: { z: 1, c: 1 },
+        });
+
+        testArithmeticOp({
+            description: 'sets the zero flag when result is zero',
+            opcode,
+            aValue: 0x10,
+            r8Register: r8,
+            r8Value: 0xf0,
+            expectedValue: 0x00,
+            expectedFlags: { z: 1, c: 1 },
+        });
+
+        testArithmeticOp({
+            description:
+                'clears the half carry flag when there is no half carry',
+            opcode,
+            aValue: 0x08,
+            r8Register: r8,
+            r8Value: 0x01,
+            initialFlags: { h: 1 },
+            expectedValue: 0x9,
+            expectedFlags: { z: 0, c: 0, h: 0 },
+        });
+    });
+
+    describe('add a, a', () => {
+        const opcode = 0x87;
+
+        testArithmeticOp({
+            description: 'adds the value of A to itself',
+            opcode,
+            aValue: 0x01,
+            r8Register: 'a',
+            r8Value: 0x01,
+            expectedValue: 0x02,
+        });
+
+        testArithmeticOp({
+            description: 'adds the value of A to itself with carry',
+            opcode,
+            aValue: 0xff,
+            r8Register: 'a',
+            r8Value: 0xff,
+            expectedValue: 0xfe,
+            expectedFlags: { z: 0, c: 1 },
+        });
+
+        testArithmeticOp({
+            description: 'handles overflow correctly',
+            opcode,
+            aValue: 0x80,
+            r8Register: 'a',
+            r8Value: 0x80,
+            expectedValue: 0x00,
+            expectedFlags: { z: 1, c: 1 },
+        });
+
+        testArithmeticOp({
+            description: 'sets the zero flag when result is zero',
+            opcode,
+            aValue: 0x0,
+            r8Register: 'a',
+            r8Value: 0x0,
+            expectedValue: 0x00,
+            expectedFlags: { z: 1, c: 0 },
+        });
+    });
+});
+
+describe('adc a, r8', () => {
+    function setupAdcTest(r8: R8Register) {
+        const opcode = Opcode.ADC_A_B + r8Registers.indexOf(r8);
+        const romData = new Uint8Array([opcode]);
+        const cpu = setupWithRom(romData);
+
+        return cpu;
+    }
+
+    describe.for(r8RegistersWithoutA)('adc a, %s', r8 => {
+        it(`adds the value of ${r8} to A with carry`, () => {
+            const cpu = setupAdcTest(r8);
+            cpu.registers.a = 0x01;
+            cpu.setR8Value(r8, 0x02);
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x04);
+        });
+
+        it('sets the zero flag when result is zero', () => {
+            const cpu = setupAdcTest(r8);
+            cpu.registers.a = 0;
+            cpu.setR8Value(r8, 0xff);
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0);
+            expect(cpu.registers.zeroFlag).toBe(1);
+        });
+
+        it('clears the subtraction flag', () => {
+            const cpu = setupAdcTest(r8);
+            cpu.registers.subtractFlag = 1;
+            cpu.registers.a = 0x01;
+            cpu.setR8Value(r8, 0x02);
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.subtractFlag).toBe(0);
+        });
+
+        it('sets the half carry flag when there is a half carry', () => {
+            const cpu = setupAdcTest(r8);
+            cpu.registers.a = 0x0f;
+            cpu.setR8Value(r8, 0x08);
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.halfCarryFlag).toBe(1);
+        });
+
+        it('sets the carry flag when there is a carry', () => {
+            const cpu = setupAdcTest(r8);
+            cpu.registers.a = 0xff;
+            cpu.setR8Value(r8, 0x01);
+            cpu.registers.carryFlag = 0;
+
+            cpu.step();
+
+            expect(cpu.registers.carryFlag).toBe(1);
+        });
+
+        it('clears the half carry flag when there is no half carry', () => {
+            const cpu = setupAdcTest(r8);
+            cpu.registers.a = 0x05;
+            cpu.setR8Value(r8, 0x05);
+            cpu.registers.carryFlag = 1;
+            cpu.registers.halfCarryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x0b);
+            expect(cpu.registers.halfCarryFlag).toBe(0);
+        });
+    });
+
+    describe('adc a, a', () => {
+        it(`adds the value of A to A with carry`, () => {
+            const cpu = setupAdcTest('a');
+            cpu.registers.a = 0x02;
+            cpu.registers.carryFlag = 1;
+
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x05);
+        });
     });
 });
