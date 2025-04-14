@@ -550,6 +550,37 @@ function generateOpcodeTable() {
         cpu.registers.carryFlag = sum > 0xff ? 1 : 0;
     });
 
+    // handle SUB A, imm8
+    table.set(Opcode.SUB_A_imm8, cpu => {
+        const value = cpu.readNextByte();
+        const newHalfCarryFlag =
+            (cpu.registers.a & 0xf) - (value & 0xf) < 0 ? 1 : 0;
+        const diff = cpu.registers.a - value;
+        cpu.registers.a = diff & 0xff;
+
+        // update flags
+        cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+        cpu.registers.subtractFlag = 1;
+        cpu.registers.halfCarryFlag = newHalfCarryFlag;
+        cpu.registers.carryFlag = diff < 0 ? 1 : 0;
+    });
+
+    // handle SBC A, imm8
+    table.set(Opcode.SBC_A_imm8, cpu => {
+        const value = cpu.readNextByte();
+        const carry = cpu.registers.carryFlag;
+        const newHalfCarryFlag =
+            (cpu.registers.a & 0xf) - (value & 0xf) - carry < 0 ? 1 : 0;
+        const diff = cpu.registers.a - value - carry;
+        cpu.registers.a = diff & 0xff;
+
+        // update flags
+        cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
+        cpu.registers.subtractFlag = 1;
+        cpu.registers.halfCarryFlag = newHalfCarryFlag;
+        cpu.registers.carryFlag = diff < 0 ? 1 : 0;
+    });
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();

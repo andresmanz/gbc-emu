@@ -226,7 +226,7 @@ export enum Opcode {
     /* 0xD3: unused */ UNUSED_D3 = 0xd3,
     CALL_NC_a16 = 0xd4,
     PUSH_DE = 0xd5,
-    SUB_A_d8 = 0xd6,
+    SUB_A_imm8 = 0xd6,
     RST_10H = 0xd7,
     RET_C = 0xd8,
     RETI = 0xd9,
@@ -234,7 +234,7 @@ export enum Opcode {
     /* 0xDB: unused */ UNUSED_DB = 0xdb,
     CALL_C_a16 = 0xdc,
     /* 0xDD: unused */ UNUSED_DD = 0xdd,
-    SBC_A_d8 = 0xde,
+    SBC_A_imm8 = 0xde,
     RST_18H = 0xdf,
 
     LDH_pa8_A = 0xe0,
