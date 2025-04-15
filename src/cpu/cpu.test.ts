@@ -93,6 +93,29 @@ function testArithmeticOp({
     });
 }
 
+const conditions = [
+    {
+        name: 'Z' as const,
+        flag: 'zeroFlag' as const,
+        trueValue: 1,
+    },
+    {
+        name: 'NZ' as const,
+        flag: 'zeroFlag' as const,
+        trueValue: 0,
+    },
+    {
+        name: 'C' as const,
+        flag: 'carryFlag' as const,
+        trueValue: 1,
+    },
+    {
+        name: 'NC' as const,
+        flag: 'carryFlag' as const,
+        trueValue: 0,
+    },
+];
+
 describe('initially', () => {
     it('sets PC to 0x0100', () => {
         const cpu = new Cpu(new MockMemoryBus(16));
@@ -916,32 +939,11 @@ describe('jr imm8', () => {
 });
 
 describe('jr cond, imm8', () => {
-    const conditions = [
-        {
-            opcode: Opcode.JR_Z_imm8,
-            flag: 'zeroFlag' as const,
-            trueValue: 1,
-        },
-        {
-            opcode: Opcode.JR_NZ_imm8,
-            flag: 'zeroFlag' as const,
-            trueValue: 0,
-        },
-        {
-            opcode: Opcode.JR_C_imm8,
-            flag: 'carryFlag' as const,
-            trueValue: 1,
-        },
-        {
-            opcode: Opcode.JR_NC_imm8,
-            flag: 'carryFlag' as const,
-            trueValue: 0,
-        },
-    ];
-
     describe.for(conditions)('jr %s, imm8', conditionInfo => {
+        const opcode = Opcode[`JR_${conditionInfo.name}_imm8`];
+
         it(`jumps to the address specified by the signed immediate value if condition is met`, () => {
-            const romData = new Uint8Array([conditionInfo.opcode, 0x02]);
+            const romData = new Uint8Array([opcode, 0x02]);
             const cpu = setupWithRom(romData);
             cpu.registers[conditionInfo.flag] = conditionInfo.trueValue;
 
@@ -951,7 +953,7 @@ describe('jr cond, imm8', () => {
         });
 
         it(`does not jump to the address specified by the signed immediate value if condition is not met`, () => {
-            const romData = new Uint8Array([conditionInfo.opcode, 0x02]);
+            const romData = new Uint8Array([opcode, 0x02]);
             const cpu = setupWithRom(romData);
             cpu.registers[conditionInfo.flag] = conditionInfo.trueValue ^ 1;
 
@@ -2453,11 +2455,17 @@ function readWordFromStack(cpu: Cpu) {
     return (high << 8) | low;
 }
 
-describe('when executing a CALL a16', () => {
+describe('when executing a CALL imm16', () => {
     function setupAfterCall() {
         // sets up a CALL to address 0x110, followed by a NOP
         const callAddress = 0x110;
-        const cpu = setupWithRomData([Opcode.CALL_a16, 0x10, 0x1, Opcode.NOP]);
+        const cpu = setupWithRomData([
+            Opcode.CALL_imm16,
+            0x10,
+            0x1,
+            Opcode.NOP,
+        ]);
+
         return { cpu, callAddress };
     }
 
@@ -2477,5 +2485,70 @@ describe('when executing a CALL a16', () => {
         cpu.step();
 
         expect(cpu.registers.pc).toBe(callAddress);
+    });
+});
+
+describe('call cond, imm16', () => {
+    describe.for(conditions)('call %s, imm16', conditionInfo => {
+        const opcode = Opcode[`CALL_${conditionInfo.name}_imm16`];
+
+        describe('when condition is met', () => {
+            function setupAfterCallWhenConditionIsMet() {
+                // sets up a CALL to address 0x110, followed by a NOP
+                const callAddress = 0x110;
+                const cpu = setupWithRomData([opcode, 0x10, 0x1, Opcode.NOP]);
+
+                cpu.registers[conditionInfo.flag] = conditionInfo.trueValue;
+
+                return { cpu, callAddress };
+            }
+
+            it('pushes the instruction address after CALL on the stack', () => {
+                const { cpu } = setupAfterCallWhenConditionIsMet();
+                const initialSp = cpu.registers.sp;
+
+                cpu.step();
+
+                expect(cpu.registers.sp).toBe(initialSp - 2);
+                expect(readWordFromStack(cpu)).toBe(0x103);
+            });
+
+            it('sets PC to the correct CALL address', () => {
+                const { cpu, callAddress } = setupAfterCallWhenConditionIsMet();
+
+                cpu.step();
+
+                expect(cpu.registers.pc).toBe(callAddress);
+            });
+        });
+
+        describe('when condition is not met', () => {
+            function setupAfterCallWhenConditionIsNotMet() {
+                // sets up a CALL to address 0x110, followed by a NOP
+                const callAddress = 0x110;
+                const cpu = setupWithRomData([opcode, 0x10, 0x1, Opcode.NOP]);
+
+                cpu.registers[conditionInfo.flag] = conditionInfo.trueValue ^ 1;
+
+                return { cpu, callAddress };
+            }
+
+            it('does not push the instruction address after CALL on the stack', () => {
+                const { cpu } = setupAfterCallWhenConditionIsNotMet();
+                const initialSp = cpu.registers.sp;
+
+                cpu.step();
+
+                expect(cpu.registers.sp).toBe(initialSp);
+            });
+
+            it('does not set PC to the call address', () => {
+                const { cpu } = setupAfterCallWhenConditionIsNotMet();
+
+                cpu.step();
+
+                expect(cpu.registers.pc).toBe(0x103);
+            });
+        });
     });
 });

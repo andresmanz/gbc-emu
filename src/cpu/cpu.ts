@@ -631,8 +631,8 @@ function generateOpcodeTable() {
         cpu.registers.carryFlag = diff < 0 ? 1 : 0;
     });
 
-    // handle CALL a16
-    table.set(Opcode.CALL_a16, cpu => {
+    // handle CALL imm16
+    table.set(Opcode.CALL_imm16, cpu => {
         const targetAddressLow = cpu.readNextByte();
         const targetAddressHigh = cpu.readNextByte();
 
@@ -644,6 +644,26 @@ function generateOpcodeTable() {
         cpu.memoryBus.write(--cpu.registers.sp, pcLow);
         cpu.registers.pc = (targetAddressHigh << 8) | targetAddressLow;
     });
+
+    // handle CALL cond, imm16
+    for (const condition of conditions) {
+        const opcode = Opcode[`CALL_${condition}_imm16`];
+
+        table.set(opcode, cpu => {
+            const targetAddressLow = cpu.readNextByte();
+            const targetAddressHigh = cpu.readNextByte();
+
+            if (conditionChecks[condition](cpu)) {
+                // store PC address on stack
+                const pcHigh = cpu.registers.pc >> 8;
+                const pcLow = cpu.registers.pc & 0xf;
+
+                cpu.memoryBus.write(--cpu.registers.sp, pcHigh);
+                cpu.memoryBus.write(--cpu.registers.sp, pcLow);
+                cpu.registers.pc = (targetAddressHigh << 8) | targetAddressLow;
+            }
+        });
+    }
 
     // handle EI
     table.set(Opcode.EI, cpu => {
