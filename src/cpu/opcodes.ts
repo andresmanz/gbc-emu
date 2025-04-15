@@ -271,3 +271,14 @@ export enum Opcode {
     CP_A_imm8 = 0xfe,
     RST_38H = 0xff,
 }
+
+export const rstOpcodes = [
+    Opcode.RST_00H,
+    Opcode.RST_08H,
+    Opcode.RST_10H,
+    Opcode.RST_18H,
+    Opcode.RST_20H,
+    Opcode.RST_28H,
+    Opcode.RST_30H,
+    Opcode.RST_38H,
+];

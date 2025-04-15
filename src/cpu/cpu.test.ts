@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Cpu, r16Registers, R8Register, r8Registers } from './cpu';
 import { MemoryBus } from '../memory/memoryBus';
 import { Rom } from '../memory/rom';
-import { Opcode } from './opcodes';
+import { Opcode, rstOpcodes } from './opcodes';
 import { Word16 } from './word16';
 
 class MockMemoryBus implements MemoryBus {
@@ -2745,5 +2745,33 @@ describe('call cond, imm16', () => {
                 expect(cpu.registers.pc).toBe(0x103);
             });
         });
+    });
+});
+
+describe.for(rstOpcodes)('when executing RST %i', opcode => {
+    function setupAfterCall(opcode: Opcode) {
+        // sets up a CALL to address 0x110, followed by a NOP
+        const callAddress = 0x110;
+        const { cpu } = setupWithRomData([opcode, Opcode.NOP]);
+
+        return { cpu, callAddress };
+    }
+
+    it('pushes the instruction address after RST on the stack', () => {
+        const { cpu } = setupAfterCall(opcode);
+        const initialSp = cpu.registers.sp;
+
+        cpu.step();
+
+        expect(cpu.registers.sp).toBe(initialSp - 2);
+        expect(readWordFromStack(cpu)).toBe(0x101);
+    });
+
+    it('sets PC to the correct CALL address', () => {
+        const { cpu } = setupAfterCall(opcode);
+
+        cpu.step();
+
+        expect(cpu.registers.pc).toBe(opcode & 0x38);
     });
 });

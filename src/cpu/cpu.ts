@@ -1,6 +1,7 @@
 import { MemoryBus } from '../memory/memoryBus';
 import { CpuRegisters } from './cpuRegisters';
-import { Opcode } from './opcodes';
+import { Opcode, rstOpcodes } from './opcodes';
+import { Word16 } from './word16';
 
 export const r8Registers = ['b', 'c', 'd', 'e', 'h', 'l', '[hl]', 'a'] as const;
 export type R8Register = (typeof r8Registers)[number];
@@ -689,6 +690,16 @@ function generateOpcodeTable() {
             if (conditionChecks[condition](cpu)) {
                 executeReturn(cpu);
             }
+        });
+    }
+
+    // handle RST vec
+    for (const opcode of rstOpcodes) {
+        table.set(opcode, cpu => {
+            const pc = new Word16(cpu.registers.pc);
+            cpu.memoryBus.write(--cpu.registers.sp, pc.high);
+            cpu.memoryBus.write(--cpu.registers.sp, pc.low);
+            cpu.registers.pc = opcode & 0x38;
         });
     }
 
