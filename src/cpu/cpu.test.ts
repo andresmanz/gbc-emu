@@ -2446,3 +2446,36 @@ describe('cp a, imm8', () => {
         expect(cpu.registers.carryFlag).toBe(0);
     });
 });
+
+function readWordFromStack(cpu: Cpu) {
+    const low = cpu.memoryBus.read(cpu.registers.sp);
+    const high = cpu.memoryBus.read(cpu.registers.sp + 1);
+    return (high << 8) | low;
+}
+
+describe('when executing a CALL a16', () => {
+    function setupAfterCall() {
+        // sets up a CALL to address 0x110, followed by a NOP
+        const callAddress = 0x110;
+        const cpu = setupWithRomData([Opcode.CALL_a16, 0x10, 0x1, Opcode.NOP]);
+        return { cpu, callAddress };
+    }
+
+    it('pushes the instruction address after CALL on the stack', () => {
+        const { cpu } = setupAfterCall();
+        const initialSp = cpu.registers.sp;
+
+        cpu.step();
+
+        expect(cpu.registers.sp).toBe(initialSp - 2);
+        expect(readWordFromStack(cpu)).toBe(0x103);
+    });
+
+    it('sets PC to the correct CALL address', () => {
+        const { cpu, callAddress } = setupAfterCall();
+
+        cpu.step();
+
+        expect(cpu.registers.pc).toBe(callAddress);
+    });
+});

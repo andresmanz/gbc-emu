@@ -631,6 +631,20 @@ function generateOpcodeTable() {
         cpu.registers.carryFlag = diff < 0 ? 1 : 0;
     });
 
+    // handle CALL a16
+    table.set(Opcode.CALL_a16, cpu => {
+        const targetAddressLow = cpu.readNextByte();
+        const targetAddressHigh = cpu.readNextByte();
+
+        // store PC address on stack
+        const pcHigh = cpu.registers.pc >> 8;
+        const pcLow = cpu.registers.pc & 0xf;
+
+        cpu.memoryBus.write(--cpu.registers.sp, pcHigh);
+        cpu.memoryBus.write(--cpu.registers.sp, pcLow);
+        cpu.registers.pc = (targetAddressHigh << 8) | targetAddressLow;
+    });
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();
