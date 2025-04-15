@@ -7,6 +7,7 @@ export const r8Registers = ['b', 'c', 'd', 'e', 'h', 'l', '[hl]', 'a'] as const;
 export type R8Register = (typeof r8Registers)[number];
 
 export const r16Registers = ['bc', 'de', 'hl', 'sp'] as const;
+export const r16StackRegisters = ['bc', 'de', 'hl', 'af'] as const;
 export const conditions = ['NZ', 'Z', 'NC', 'C'] as const;
 
 export class Cpu {
@@ -93,7 +94,7 @@ export class Cpu {
 }
 
 function generateOpcodeTable() {
-    const table = new Map<number, (cpu: Cpu) => void>();
+    const table = new Map<Opcode, (cpu: Cpu) => void>();
 
     // NOP
     table.set(Opcode.NOP, () => {});
@@ -730,6 +731,42 @@ function generateOpcodeTable() {
     // handle JP HL
     table.set(Opcode.JP_HL, cpu => {
         cpu.registers.pc = cpu.registers.hl;
+    });
+
+    // handle PUSH r16
+    for (const register of r16StackRegisters) {
+        // TODO refactor
+        const regKey = register.toUpperCase() as 'BC' | 'DE' | 'HL' | 'AF';
+        const opcode = Opcode[`PUSH_${regKey}`];
+
+        table.set(opcode, cpu => {
+            const word = new Word16(cpu.registers[register]);
+            cpu.memoryBus.write(--cpu.registers.sp, word.high);
+            cpu.memoryBus.write(--cpu.registers.sp, word.low);
+        });
+    }
+
+    // handle POP r16
+    for (const register of r16StackRegisters) {
+        // TODO refactor
+        const regKey = register.toUpperCase() as 'BC' | 'DE' | 'HL' | 'AF';
+        const opcode = Opcode[`POP_${regKey}`];
+
+        table.set(opcode, cpu => {
+            const word = new Word16();
+            word.low = cpu.memoryBus.read(cpu.registers.sp++);
+            word.high = cpu.memoryBus.read(cpu.registers.sp++);
+            cpu.registers[register] = word.value;
+        });
+    }
+
+    // handle LDH [imm16], A
+    table.set(Opcode.LDH_pa8_A, cpu => {
+        const address = cpu.readNextWord();
+
+        if (address >= 0xff00 && address <= 0xffff) {
+            cpu.memoryBus.write(address, cpu.registers.a);
+        }
     });
 
     // handle EI

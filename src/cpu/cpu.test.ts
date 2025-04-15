@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { Cpu, r16Registers, R8Register, r8Registers } from './cpu';
+import {
+    Cpu,
+    r16Registers,
+    r16StackRegisters,
+    R8Register,
+    r8Registers,
+} from './cpu';
 import { MemoryBus } from '../memory/memoryBus';
 import { Rom } from '../memory/rom';
 import { Opcode, rstOpcodes } from './opcodes';
@@ -2822,5 +2828,63 @@ describe('when executing JP HL', () => {
         cpu.step();
 
         expect(cpu.registers.pc).toBe(0x1234);
+    });
+});
+
+describe.for(r16StackRegisters)('when executing PUSH %s', register => {
+    const pushOpcode =
+        Opcode.PUSH_BC + r16StackRegisters.indexOf(register) * 0x10;
+    const popOpcode =
+        Opcode.POP_BC + r16StackRegisters.indexOf(register) * 0x10;
+
+    it('stores the value of %s on the stack', () => {
+        const { cpu } = setupWithRomData([pushOpcode]);
+        cpu.registers[register] = 0x1234;
+        const initialSp = cpu.registers.sp;
+
+        cpu.step();
+
+        expect(cpu.registers.sp).toBe(initialSp - 2);
+        expect(readWordFromStack(cpu)).toBe(0x1234);
+    });
+
+    describe('when executing POP %s', () => {
+        it('pops the value from the stack', () => {
+            const { cpu } = setupWithRomData([pushOpcode, popOpcode]);
+            cpu.registers[register] = 0x1234;
+            const initialSp = cpu.registers.sp;
+
+            // PUSH
+            cpu.step();
+
+            // reset value
+            cpu.registers[register] = 0x0000;
+
+            // POP
+            cpu.step();
+
+            expect(cpu.registers.sp).toBe(initialSp);
+            expect(cpu.registers[register]).toBe(0x1234);
+        });
+    });
+});
+
+describe('when executing LDH [imm16], A', () => {
+    it('correctly sets the value at the correct address', () => {
+        const { cpu } = setupWithRomData([Opcode.LDH_pa8_A, 0x12, 0xff]);
+        cpu.registers.a = 0x34;
+
+        cpu.step();
+
+        expect(cpu.memoryBus.read(0xff12)).toBe(0x34);
+    });
+
+    it('does not change the value if the address is not between 0xff00 and 0xffff', () => {
+        const { cpu } = setupWithRomData([Opcode.LDH_pa8_A, 0x12, 0x55]);
+        cpu.registers.a = 0x34;
+
+        cpu.step();
+
+        expect(cpu.memoryBus.read(0x5512)).toBe(0x0);
     });
 });
