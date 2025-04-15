@@ -2527,6 +2527,150 @@ describe('when executing a CALL imm16', () => {
             expect(cpu.registers.pc).toBe(0x103);
         });
     });
+
+    describe('when executing RETI', () => {
+        function setupAfterReti() {
+            // sets up a CALL to address 0x110, followed by a NOP
+            const callAddress = new Word16(0x110);
+            const { cpu, memoryBus } = setupWithRomData([
+                Opcode.CALL_imm16,
+                callAddress.low,
+                callAddress.high,
+                Opcode.NOP,
+            ]);
+
+            memoryBus.write(callAddress.value, Opcode.NOP);
+            memoryBus.write(callAddress.value + 1, Opcode.RETI);
+
+            // CALL
+            cpu.step();
+            // NOP
+            cpu.step();
+
+            return { cpu, callAddress };
+        }
+
+        it('enables interrupts', () => {
+            const { cpu } = setupAfterReti();
+
+            cpu.step();
+
+            expect(cpu.areInterruptsEnabled).toBe(true);
+        });
+
+        it('pops the CALL target address from the stack', () => {
+            const { cpu } = setupAfterReti();
+            const initialSp = cpu.registers.sp;
+
+            cpu.step();
+
+            expect(cpu.registers.sp).toBe(initialSp + 2);
+        });
+
+        it('sets PC to the address stored on the stack', () => {
+            const { cpu } = setupAfterReti();
+
+            cpu.step();
+
+            expect(cpu.registers.pc).toBe(0x103);
+        });
+    });
+
+    describe('when executing RET cond', () => {
+        describe.for(conditions)('ret %s', conditionInfo => {
+            describe('when condition is met', () => {
+                function setupForRetWithConditionWhenConditionMet() {
+                    // sets up a CALL to address 0x110, followed by a NOP
+                    const callAddress = new Word16(0x110);
+                    const { cpu, memoryBus } = setupWithRomData([
+                        Opcode.CALL_imm16,
+                        callAddress.low,
+                        callAddress.high,
+                        Opcode.NOP,
+                    ]);
+
+                    const opcode = Opcode[`RET_${conditionInfo.name}`];
+
+                    memoryBus.write(callAddress.value, Opcode.NOP);
+                    memoryBus.write(callAddress.value + 1, opcode);
+
+                    // CALL
+                    cpu.step();
+                    // NOP
+                    cpu.step();
+
+                    cpu.registers[conditionInfo.flag] = conditionInfo.trueValue;
+
+                    return { cpu, callAddress };
+                }
+
+                it('pops the CALL target address from the stack', () => {
+                    const { cpu } = setupForRetWithConditionWhenConditionMet();
+                    const initialSp = cpu.registers.sp;
+
+                    cpu.step();
+
+                    expect(cpu.registers.sp).toBe(initialSp + 2);
+                });
+
+                it('sets PC to the address stored on the stack', () => {
+                    const { cpu } = setupForRetWithConditionWhenConditionMet();
+
+                    cpu.step();
+
+                    expect(cpu.registers.pc).toBe(0x103);
+                });
+            });
+
+            describe('when condition is not met', () => {
+                function setupForRetWithConditionWhenConditionNotMet() {
+                    // sets up a CALL to address 0x110, followed by a NOP
+                    const callAddress = new Word16(0x110);
+                    const { cpu, memoryBus } = setupWithRomData([
+                        Opcode.CALL_imm16,
+                        callAddress.low,
+                        callAddress.high,
+                        Opcode.NOP,
+                    ]);
+
+                    const opcode = Opcode[`RET_${conditionInfo.name}`];
+
+                    memoryBus.write(callAddress.value, Opcode.NOP);
+                    memoryBus.write(callAddress.value + 1, opcode);
+
+                    // CALL
+                    cpu.step();
+                    // NOP
+                    cpu.step();
+
+                    cpu.registers[conditionInfo.flag] =
+                        conditionInfo.trueValue ^ 1;
+
+                    return { cpu, callAddress };
+                }
+
+                it('does not pop the CALL target address from the stack', () => {
+                    const { cpu } =
+                        setupForRetWithConditionWhenConditionNotMet();
+                    const initialSp = cpu.registers.sp;
+
+                    cpu.step();
+
+                    expect(cpu.registers.sp).toBe(initialSp);
+                });
+
+                it('increments PC', () => {
+                    const { cpu } =
+                        setupForRetWithConditionWhenConditionNotMet();
+                    const initialPc = cpu.registers.pc;
+
+                    cpu.step();
+
+                    expect(cpu.registers.pc).toBe(initialPc + 1);
+                });
+            });
+        });
+    });
 });
 
 describe('call cond, imm16', () => {

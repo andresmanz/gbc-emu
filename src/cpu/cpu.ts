@@ -12,7 +12,7 @@ export class Cpu {
     public memoryBus: MemoryBus;
     public registers = new CpuRegisters();
     private opcodeTable = new Map<number, (cpu: Cpu) => void>();
-    private ime = false;
+    public ime = false;
     private enableImeAfter = 0;
 
     constructor(memoryBus: MemoryBus) {
@@ -81,13 +81,13 @@ export class Cpu {
         return this.ime;
     }
 
-    requestImeEnable() {
-        this.enableImeAfter = 2;
+    set areInterruptsEnabled(value: boolean) {
+        this.ime = value;
+        this.enableImeAfter = 0;
     }
 
-    disableIme() {
-        this.ime = false;
-        this.enableImeAfter = 0;
+    requestImeEnable() {
+        this.enableImeAfter = 2;
     }
 }
 
@@ -666,12 +666,31 @@ function generateOpcodeTable() {
     }
 
     // handle RET
-    table.set(Opcode.RET, cpu => {
+    const executeReturn = (cpu: Cpu) => {
         const newPcLow = cpu.memoryBus.read(cpu.registers.sp++);
         const newPcHigh = cpu.memoryBus.read(cpu.registers.sp++);
 
         cpu.registers.pc = (newPcHigh << 8) | newPcLow;
+    };
+
+    table.set(Opcode.RET, executeReturn);
+
+    // handle RETI
+    table.set(Opcode.RETI, cpu => {
+        executeReturn(cpu);
+        cpu.areInterruptsEnabled = true;
     });
+
+    // handle RET cond
+    for (const condition of conditions) {
+        const opcode = Opcode[`RET_${condition}`];
+
+        table.set(opcode, cpu => {
+            if (conditionChecks[condition](cpu)) {
+                executeReturn(cpu);
+            }
+        });
+    }
 
     // handle EI
     table.set(Opcode.EI, cpu => {
@@ -680,7 +699,7 @@ function generateOpcodeTable() {
 
     // handle DI
     table.set(Opcode.DI, cpu => {
-        cpu.disableIme();
+        cpu.areInterruptsEnabled = false;
     });
 
     return table;
