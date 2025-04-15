@@ -3,6 +3,7 @@ import { Cpu, r16Registers, R8Register, r8Registers } from './cpu';
 import { MemoryBus } from '../memory/memoryBus';
 import { Rom } from '../memory/rom';
 import { Opcode } from './opcodes';
+import { Word16 } from './word16';
 
 class MockMemoryBus implements MemoryBus {
     private memory: Uint8Array;
@@ -146,7 +147,7 @@ function setupWithRomData(data: number[]) {
     memoryBus.setRomData(new Uint8Array(data));
 
     const cpu = new Cpu(memoryBus);
-    return cpu;
+    return { cpu, memoryBus };
 }
 
 it('handles nop opcode', () => {
@@ -1901,7 +1902,7 @@ describe('add a, imm8', () => {
 
 describe('adc a, imm8', () => {
     it(`adds the immediate value to A with carry`, () => {
-        const cpu = setupWithRomData([Opcode.ADC_A_imm8, 0x02]);
+        const { cpu } = setupWithRomData([Opcode.ADC_A_imm8, 0x02]);
         cpu.registers.a = 0x01;
         cpu.registers.carryFlag = 1;
 
@@ -1911,7 +1912,7 @@ describe('adc a, imm8', () => {
     });
 
     it('correctly increases PC', () => {
-        const cpu = setupWithRomData([Opcode.ADC_A_imm8, 0x02]);
+        const { cpu } = setupWithRomData([Opcode.ADC_A_imm8, 0x02]);
 
         cpu.step();
 
@@ -1919,7 +1920,7 @@ describe('adc a, imm8', () => {
     });
 
     it('sets the zero flag when result is zero', () => {
-        const cpu = setupWithRomData([Opcode.ADC_A_imm8, 0xff]);
+        const { cpu } = setupWithRomData([Opcode.ADC_A_imm8, 0xff]);
         cpu.registers.a = 0;
         cpu.registers.carryFlag = 1;
 
@@ -1930,7 +1931,7 @@ describe('adc a, imm8', () => {
     });
 
     it('clears the subtraction flag', () => {
-        const cpu = setupWithRomData([Opcode.ADC_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.ADC_A_imm8, 0x01]);
         cpu.registers.subtractFlag = 1;
         cpu.registers.a = 0x01;
         cpu.registers.carryFlag = 1;
@@ -1941,7 +1942,7 @@ describe('adc a, imm8', () => {
     });
 
     it('sets the half carry flag when there is a half carry', () => {
-        const cpu = setupWithRomData([Opcode.ADC_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.ADC_A_imm8, 0x01]);
         cpu.registers.a = 0x0f;
         cpu.registers.carryFlag = 1;
 
@@ -1951,7 +1952,7 @@ describe('adc a, imm8', () => {
     });
 
     it('clears the half carry flag when there is no half carry', () => {
-        const cpu = setupWithRomData([Opcode.ADC_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.ADC_A_imm8, 0x01]);
         cpu.registers.a = 0x05;
         cpu.registers.carryFlag = 1;
         cpu.registers.halfCarryFlag = 1;
@@ -1963,7 +1964,7 @@ describe('adc a, imm8', () => {
     });
 
     it('sets the carry flag when there is a carry', () => {
-        const cpu = setupWithRomData([Opcode.ADC_A_imm8, 0x02]);
+        const { cpu } = setupWithRomData([Opcode.ADC_A_imm8, 0x02]);
         cpu.registers.a = 0xff;
         cpu.registers.carryFlag = 0;
 
@@ -1973,7 +1974,7 @@ describe('adc a, imm8', () => {
     });
 
     it('clears the carry flag when there is no carry', () => {
-        const cpu = setupWithRomData([Opcode.ADC_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.ADC_A_imm8, 0x01]);
         cpu.registers.a = 0x05;
         cpu.registers.carryFlag = 1;
 
@@ -1986,7 +1987,7 @@ describe('adc a, imm8', () => {
 
 describe('sub a, imm8', () => {
     it(`subtracts the immediate value from A`, () => {
-        const cpu = setupWithRomData([Opcode.SUB_A_imm8, 0x02]);
+        const { cpu } = setupWithRomData([Opcode.SUB_A_imm8, 0x02]);
         cpu.registers.a = 0x03;
 
         cpu.step();
@@ -1995,7 +1996,7 @@ describe('sub a, imm8', () => {
     });
 
     it('correctly increases PC', () => {
-        const cpu = setupWithRomData([Opcode.SUB_A_imm8, 0x02]);
+        const { cpu } = setupWithRomData([Opcode.SUB_A_imm8, 0x02]);
 
         cpu.step();
 
@@ -2003,7 +2004,7 @@ describe('sub a, imm8', () => {
     });
 
     it('sets the zero flag when result is zero', () => {
-        const cpu = setupWithRomData([Opcode.SUB_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.SUB_A_imm8, 0x01]);
         cpu.registers.a = 0x01;
 
         cpu.step();
@@ -2012,7 +2013,7 @@ describe('sub a, imm8', () => {
     });
 
     it('clears the zero flag when result is not zero', () => {
-        const cpu = setupWithRomData([Opcode.SUB_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.SUB_A_imm8, 0x01]);
         cpu.registers.a = 0x02;
 
         cpu.step();
@@ -2021,7 +2022,7 @@ describe('sub a, imm8', () => {
     });
 
     it('sets the subtraction flag', () => {
-        const cpu = setupWithRomData([Opcode.SUB_A_imm8, 0x21]);
+        const { cpu } = setupWithRomData([Opcode.SUB_A_imm8, 0x21]);
         cpu.registers.subtractFlag = 0;
         cpu.registers.a = 0x01;
 
@@ -2031,7 +2032,7 @@ describe('sub a, imm8', () => {
     });
 
     it('sets the half carry flag when there is a half carry', () => {
-        const cpu = setupWithRomData([Opcode.SUB_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.SUB_A_imm8, 0x01]);
         cpu.registers.a = 0x10;
 
         cpu.step();
@@ -2040,7 +2041,7 @@ describe('sub a, imm8', () => {
     });
 
     it('clears the half carry flag when there is no half carry', () => {
-        const cpu = setupWithRomData([Opcode.SUB_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.SUB_A_imm8, 0x01]);
         cpu.registers.a = 0x09;
         cpu.registers.halfCarryFlag = 1;
 
@@ -2051,7 +2052,7 @@ describe('sub a, imm8', () => {
     });
 
     it('sets the carry flag when there is a carry', () => {
-        const cpu = setupWithRomData([Opcode.SUB_A_imm8, 0x02]);
+        const { cpu } = setupWithRomData([Opcode.SUB_A_imm8, 0x02]);
         cpu.registers.a = 0x00;
 
         cpu.step();
@@ -2060,7 +2061,7 @@ describe('sub a, imm8', () => {
     });
 
     it('clears the carry flag when there is no carry', () => {
-        const cpu = setupWithRomData([Opcode.SUB_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.SUB_A_imm8, 0x01]);
         cpu.registers.a = 0x01;
         cpu.registers.carryFlag = 1;
 
@@ -2073,7 +2074,7 @@ describe('sub a, imm8', () => {
 
 describe('sbc a, imm8', () => {
     it(`subtracts the immediate value from A with carry`, () => {
-        const cpu = setupWithRomData([Opcode.SBC_A_imm8, 0x02]);
+        const { cpu } = setupWithRomData([Opcode.SBC_A_imm8, 0x02]);
         cpu.registers.a = 0x03;
         cpu.registers.carryFlag = 1;
 
@@ -2083,7 +2084,7 @@ describe('sbc a, imm8', () => {
     });
 
     it('correctly increases PC', () => {
-        const cpu = setupWithRomData([Opcode.SBC_A_imm8, 0x02]);
+        const { cpu } = setupWithRomData([Opcode.SBC_A_imm8, 0x02]);
 
         cpu.step();
 
@@ -2091,7 +2092,7 @@ describe('sbc a, imm8', () => {
     });
 
     it('sets the zero flag when result is zero', () => {
-        const cpu = setupWithRomData([Opcode.SBC_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.SBC_A_imm8, 0x01]);
         cpu.registers.a = 0x02;
         cpu.registers.carryFlag = 1;
 
@@ -2101,7 +2102,7 @@ describe('sbc a, imm8', () => {
     });
 
     it('clears the zero flag when result is not zero', () => {
-        const cpu = setupWithRomData([Opcode.SBC_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.SBC_A_imm8, 0x01]);
         cpu.registers.a = 0x03;
         cpu.registers.carryFlag = 1;
 
@@ -2111,7 +2112,7 @@ describe('sbc a, imm8', () => {
     });
 
     it('sets the subtraction flag', () => {
-        const cpu = setupWithRomData([Opcode.SBC_A_imm8, 0x21]);
+        const { cpu } = setupWithRomData([Opcode.SBC_A_imm8, 0x21]);
         cpu.registers.subtractFlag = 0;
         cpu.registers.a = 0x01;
         cpu.registers.carryFlag = 1;
@@ -2122,7 +2123,7 @@ describe('sbc a, imm8', () => {
     });
 
     it('sets the half carry flag when there is a half carry', () => {
-        const cpu = setupWithRomData([Opcode.SBC_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.SBC_A_imm8, 0x01]);
         cpu.registers.a = 0x10;
         cpu.registers.carryFlag = 1;
 
@@ -2132,7 +2133,7 @@ describe('sbc a, imm8', () => {
     });
 
     it('clears the half carry flag when there is no half carry', () => {
-        const cpu = setupWithRomData([Opcode.SBC_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.SBC_A_imm8, 0x01]);
         cpu.registers.a = 0x09;
         cpu.registers.carryFlag = 1;
         cpu.registers.halfCarryFlag = 1;
@@ -2144,7 +2145,7 @@ describe('sbc a, imm8', () => {
     });
 
     it('sets the carry flag when there is a carry', () => {
-        const cpu = setupWithRomData([Opcode.SBC_A_imm8, 0x02]);
+        const { cpu } = setupWithRomData([Opcode.SBC_A_imm8, 0x02]);
         cpu.registers.a = 0x00;
         cpu.registers.carryFlag = 0;
 
@@ -2154,7 +2155,7 @@ describe('sbc a, imm8', () => {
     });
 
     it('clears the carry flag when there is no carry', () => {
-        const cpu = setupWithRomData([Opcode.SBC_A_imm8, 0x01]);
+        const { cpu } = setupWithRomData([Opcode.SBC_A_imm8, 0x01]);
         cpu.registers.a = 0x02;
         cpu.registers.carryFlag = 1;
 
@@ -2169,7 +2170,7 @@ describe('and a, imm8', () => {
     const opcode = Opcode.AND_A_imm8;
 
     it('correctly performs a bitwise AND operation', () => {
-        const cpu = setupWithRomData([opcode, 0b10101010]);
+        const { cpu } = setupWithRomData([opcode, 0b10101010]);
         cpu.registers.a = 0b11001100;
 
         cpu.step();
@@ -2178,7 +2179,7 @@ describe('and a, imm8', () => {
     });
 
     it('correctly increases PC', () => {
-        const cpu = setupWithRomData([opcode, 0b10101010]);
+        const { cpu } = setupWithRomData([opcode, 0b10101010]);
 
         cpu.step();
 
@@ -2186,7 +2187,7 @@ describe('and a, imm8', () => {
     });
 
     it('sets the zero flag when result is zero', () => {
-        const cpu = setupWithRomData([opcode, 0b00000000]);
+        const { cpu } = setupWithRomData([opcode, 0b00000000]);
         cpu.registers.a = 0b00000000;
 
         cpu.step();
@@ -2195,7 +2196,7 @@ describe('and a, imm8', () => {
     });
 
     it('clears the zero flag when result is not zero', () => {
-        const cpu = setupWithRomData([opcode, 0b00000001]);
+        const { cpu } = setupWithRomData([opcode, 0b00000001]);
         cpu.registers.a = 0b00000001;
 
         cpu.step();
@@ -2204,7 +2205,7 @@ describe('and a, imm8', () => {
     });
 
     it('clears the subtraction flag', () => {
-        const cpu = setupWithRomData([opcode, 0b00000001]);
+        const { cpu } = setupWithRomData([opcode, 0b00000001]);
         cpu.registers.subtractFlag = 1;
 
         cpu.step();
@@ -2213,7 +2214,7 @@ describe('and a, imm8', () => {
     });
 
     it('sets the half carry flag', () => {
-        const cpu = setupWithRomData([opcode, 0b00000001]);
+        const { cpu } = setupWithRomData([opcode, 0b00000001]);
         cpu.registers.halfCarryFlag = 0;
 
         cpu.step();
@@ -2222,7 +2223,7 @@ describe('and a, imm8', () => {
     });
 
     it('clears the carry flag', () => {
-        const cpu = setupWithRomData([opcode, 0b00000001]);
+        const { cpu } = setupWithRomData([opcode, 0b00000001]);
         cpu.registers.carryFlag = 1;
 
         cpu.step();
@@ -2235,7 +2236,7 @@ describe('xor a, imm8', () => {
     const opcode = Opcode.XOR_A_imm8;
 
     it('correctly performs a bitwise XOR operation', () => {
-        const cpu = setupWithRomData([opcode, 0b10101010]);
+        const { cpu } = setupWithRomData([opcode, 0b10101010]);
         cpu.registers.a = 0b11001100;
 
         cpu.step();
@@ -2244,7 +2245,7 @@ describe('xor a, imm8', () => {
     });
 
     it('correctly increases PC', () => {
-        const cpu = setupWithRomData([opcode, 0b10101010]);
+        const { cpu } = setupWithRomData([opcode, 0b10101010]);
 
         cpu.step();
 
@@ -2252,7 +2253,7 @@ describe('xor a, imm8', () => {
     });
 
     it('sets the zero flag when result is zero', () => {
-        const cpu = setupWithRomData([opcode, 0b00000000]);
+        const { cpu } = setupWithRomData([opcode, 0b00000000]);
         cpu.registers.a = 0b00000000;
 
         cpu.step();
@@ -2261,7 +2262,7 @@ describe('xor a, imm8', () => {
     });
 
     it('clears the zero flag when result is not zero', () => {
-        const cpu = setupWithRomData([opcode, 0b00000000]);
+        const { cpu } = setupWithRomData([opcode, 0b00000000]);
         cpu.registers.a = 0b00000001;
 
         cpu.step();
@@ -2270,7 +2271,7 @@ describe('xor a, imm8', () => {
     });
 
     it('clears the subtraction flag', () => {
-        const cpu = setupWithRomData([opcode, 0b00000001]);
+        const { cpu } = setupWithRomData([opcode, 0b00000001]);
         cpu.registers.subtractFlag = 1;
 
         cpu.step();
@@ -2279,7 +2280,7 @@ describe('xor a, imm8', () => {
     });
 
     it('clears the half carry flag', () => {
-        const cpu = setupWithRomData([opcode, 0b00000001]);
+        const { cpu } = setupWithRomData([opcode, 0b00000001]);
         cpu.registers.halfCarryFlag = 1;
 
         cpu.step();
@@ -2288,7 +2289,7 @@ describe('xor a, imm8', () => {
     });
 
     it('clears the carry flag', () => {
-        const cpu = setupWithRomData([opcode, 0b00000001]);
+        const { cpu } = setupWithRomData([opcode, 0b00000001]);
         cpu.registers.carryFlag = 1;
 
         cpu.step();
@@ -2301,7 +2302,7 @@ describe('or a, imm8', () => {
     const opcode = Opcode.OR_A_imm8;
 
     it('correctly performs a bitwise OR operation', () => {
-        const cpu = setupWithRomData([opcode, 0b10101010]);
+        const { cpu } = setupWithRomData([opcode, 0b10101010]);
         cpu.registers.a = 0b11001100;
 
         cpu.step();
@@ -2310,7 +2311,7 @@ describe('or a, imm8', () => {
     });
 
     it('correctly increases PC', () => {
-        const cpu = setupWithRomData([opcode, 0b10101010]);
+        const { cpu } = setupWithRomData([opcode, 0b10101010]);
 
         cpu.step();
 
@@ -2318,7 +2319,7 @@ describe('or a, imm8', () => {
     });
 
     it('sets the zero flag when result is zero', () => {
-        const cpu = setupWithRomData([opcode, 0b00000000]);
+        const { cpu } = setupWithRomData([opcode, 0b00000000]);
         cpu.registers.a = 0b00000000;
 
         cpu.step();
@@ -2327,7 +2328,7 @@ describe('or a, imm8', () => {
     });
 
     it('clears the zero flag when result is not zero', () => {
-        const cpu = setupWithRomData([opcode, 0b00000000]);
+        const { cpu } = setupWithRomData([opcode, 0b00000000]);
         cpu.registers.a = 0b00000001;
 
         cpu.step();
@@ -2336,7 +2337,7 @@ describe('or a, imm8', () => {
     });
 
     it('clears the subtraction flag', () => {
-        const cpu = setupWithRomData([opcode, 0b00000001]);
+        const { cpu } = setupWithRomData([opcode, 0b00000001]);
         cpu.registers.subtractFlag = 1;
 
         cpu.step();
@@ -2345,7 +2346,7 @@ describe('or a, imm8', () => {
     });
 
     it('clears the half carry flag', () => {
-        const cpu = setupWithRomData([opcode, 0b00000001]);
+        const { cpu } = setupWithRomData([opcode, 0b00000001]);
         cpu.registers.halfCarryFlag = 1;
 
         cpu.step();
@@ -2354,7 +2355,7 @@ describe('or a, imm8', () => {
     });
 
     it('clears the carry flag', () => {
-        const cpu = setupWithRomData([opcode, 0b00000001]);
+        const { cpu } = setupWithRomData([opcode, 0b00000001]);
         cpu.registers.carryFlag = 1;
 
         cpu.step();
@@ -2367,7 +2368,7 @@ describe('cp a, imm8', () => {
     const opcode = Opcode.CP_A_imm8;
 
     it('does not change the value of A', () => {
-        const cpu = setupWithRomData([opcode, 0x01]);
+        const { cpu } = setupWithRomData([opcode, 0x01]);
         cpu.registers.a = 0x42;
 
         cpu.step();
@@ -2376,7 +2377,7 @@ describe('cp a, imm8', () => {
     });
 
     it('correctly increases PC', () => {
-        const cpu = setupWithRomData([opcode, 0b10101010]);
+        const { cpu } = setupWithRomData([opcode, 0b10101010]);
 
         cpu.step();
 
@@ -2384,7 +2385,7 @@ describe('cp a, imm8', () => {
     });
 
     it('sets the zero flag when result is zero', () => {
-        const cpu = setupWithRomData([opcode, 0b00000000]);
+        const { cpu } = setupWithRomData([opcode, 0b00000000]);
         cpu.registers.a = 0b00000000;
 
         cpu.step();
@@ -2393,7 +2394,7 @@ describe('cp a, imm8', () => {
     });
 
     it('clears the zero flag when result is not zero', () => {
-        const cpu = setupWithRomData([opcode, 0b00000000]);
+        const { cpu } = setupWithRomData([opcode, 0b00000000]);
         cpu.registers.a = 0b00000001;
 
         cpu.step();
@@ -2402,7 +2403,7 @@ describe('cp a, imm8', () => {
     });
 
     it('sets the subtraction flag', () => {
-        const cpu = setupWithRomData([opcode, 0b00000001]);
+        const { cpu } = setupWithRomData([opcode, 0b00000001]);
         cpu.registers.subtractFlag = 0;
 
         cpu.step();
@@ -2411,7 +2412,7 @@ describe('cp a, imm8', () => {
     });
 
     it('sets the half carry flag when there is a half borrow', () => {
-        const cpu = setupWithRomData([opcode, 0x08]);
+        const { cpu } = setupWithRomData([opcode, 0x08]);
         cpu.registers.a = 0x10;
         cpu.registers.halfCarryFlag = 0;
 
@@ -2421,7 +2422,7 @@ describe('cp a, imm8', () => {
     });
 
     it('clears the half carry flag when there is no half borrow', () => {
-        const cpu = setupWithRomData([opcode, 0x01]);
+        const { cpu } = setupWithRomData([opcode, 0x01]);
         cpu.registers.a = 0x09;
         cpu.registers.halfCarryFlag = 1;
 
@@ -2431,7 +2432,7 @@ describe('cp a, imm8', () => {
     });
 
     it('sets the carry flag when A is less than the immediate value', () => {
-        const cpu = setupWithRomData([opcode, 0x01]);
+        const { cpu } = setupWithRomData([opcode, 0x01]);
         cpu.registers.a = 0x00;
 
         cpu.step();
@@ -2440,7 +2441,7 @@ describe('cp a, imm8', () => {
     });
 
     it('clears the carry flag when A is greater than or equal to the immediate value', () => {
-        const cpu = setupWithRomData([opcode, 0x01]);
+        const { cpu } = setupWithRomData([opcode, 0x01]);
         cpu.registers.a = 0x01;
 
         cpu.step();
@@ -2459,7 +2460,7 @@ describe('when executing a CALL imm16', () => {
     function setupAfterCall() {
         // sets up a CALL to address 0x110, followed by a NOP
         const callAddress = 0x110;
-        const cpu = setupWithRomData([
+        const { cpu } = setupWithRomData([
             Opcode.CALL_imm16,
             0x10,
             0x1,
@@ -2486,6 +2487,46 @@ describe('when executing a CALL imm16', () => {
 
         expect(cpu.registers.pc).toBe(callAddress);
     });
+
+    describe('when executing RET', () => {
+        function setupAfterRet() {
+            // sets up a CALL to address 0x110, followed by a NOP
+            const callAddress = new Word16(0x110);
+            const { cpu, memoryBus } = setupWithRomData([
+                Opcode.CALL_imm16,
+                callAddress.low,
+                callAddress.high,
+                Opcode.NOP,
+            ]);
+
+            memoryBus.write(callAddress.value, Opcode.NOP);
+            memoryBus.write(callAddress.value + 1, Opcode.RET);
+
+            // CALL
+            cpu.step();
+            // NOP
+            cpu.step();
+
+            return { cpu, callAddress };
+        }
+
+        it('pops the CALL target address from the stack', () => {
+            const { cpu } = setupAfterRet();
+            const initialSp = cpu.registers.sp;
+
+            cpu.step();
+
+            expect(cpu.registers.sp).toBe(initialSp + 2);
+        });
+
+        it('sets PC to the address stored on the stack', () => {
+            const { cpu } = setupAfterRet();
+
+            cpu.step();
+
+            expect(cpu.registers.pc).toBe(0x103);
+        });
+    });
 });
 
 describe('call cond, imm16', () => {
@@ -2496,7 +2537,12 @@ describe('call cond, imm16', () => {
             function setupAfterCallWhenConditionIsMet() {
                 // sets up a CALL to address 0x110, followed by a NOP
                 const callAddress = 0x110;
-                const cpu = setupWithRomData([opcode, 0x10, 0x1, Opcode.NOP]);
+                const { cpu } = setupWithRomData([
+                    opcode,
+                    0x10,
+                    0x1,
+                    Opcode.NOP,
+                ]);
 
                 cpu.registers[conditionInfo.flag] = conditionInfo.trueValue;
 
@@ -2526,7 +2572,12 @@ describe('call cond, imm16', () => {
             function setupAfterCallWhenConditionIsNotMet() {
                 // sets up a CALL to address 0x110, followed by a NOP
                 const callAddress = 0x110;
-                const cpu = setupWithRomData([opcode, 0x10, 0x1, Opcode.NOP]);
+                const { cpu } = setupWithRomData([
+                    opcode,
+                    0x10,
+                    0x1,
+                    Opcode.NOP,
+                ]);
 
                 cpu.registers[conditionInfo.flag] = conditionInfo.trueValue ^ 1;
 

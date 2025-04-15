@@ -665,6 +665,14 @@ function generateOpcodeTable() {
         });
     }
 
+    // handle RET
+    table.set(Opcode.RET, cpu => {
+        const newPcLow = cpu.memoryBus.read(cpu.registers.sp++);
+        const newPcHigh = cpu.memoryBus.read(cpu.registers.sp++);
+
+        cpu.registers.pc = (newPcHigh << 8) | newPcLow;
+    });
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();
