@@ -148,7 +148,7 @@ function generateOpcodeTable() {
     });
 
     // handle LD [imm16], sp
-    table.set(Opcode.LD_a16_SP, cpu => {
+    table.set(Opcode.LD_imm16_SP, cpu => {
         const address = cpu.readNextWord();
         const sp = cpu.registers.sp;
         cpu.memoryBus.write(address, sp & 0xff);
@@ -702,6 +702,35 @@ function generateOpcodeTable() {
             cpu.registers.pc = opcode & 0x38;
         });
     }
+
+    // handle JP imm16
+    table.set(Opcode.JP_imm16, cpu => {
+        const address = new Word16();
+        address.low = cpu.readNextByte();
+        address.high = cpu.readNextByte();
+
+        cpu.registers.pc = address.value;
+    });
+
+    // handle JP cond, imm16
+    for (const condition of conditions) {
+        const opcode = Opcode[`JP_${condition}_imm16`];
+
+        table.set(opcode, cpu => {
+            const address = new Word16();
+            address.low = cpu.readNextByte();
+            address.high = cpu.readNextByte();
+
+            if (conditionChecks[condition](cpu)) {
+                cpu.registers.pc = address.value;
+            }
+        });
+    }
+
+    // handle JP HL
+    table.set(Opcode.JP_HL, cpu => {
+        cpu.registers.pc = cpu.registers.hl;
+    });
 
     // handle EI
     table.set(Opcode.EI, cpu => {

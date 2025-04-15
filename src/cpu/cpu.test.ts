@@ -2775,3 +2775,52 @@ describe.for(rstOpcodes)('when executing RST %i', opcode => {
         expect(cpu.registers.pc).toBe(opcode & 0x38);
     });
 });
+
+describe('when executing JP imm16', () => {
+    it('sets PC to the correct address', () => {
+        const { cpu } = setupWithRomData([Opcode.JP_imm16, 0x34, 0x12]);
+
+        cpu.step();
+
+        expect(cpu.registers.pc).toBe(0x1234);
+    });
+});
+
+describe('when executing JP cond, imm16', () => {
+    describe.for(conditions)('JP %s, imm16', condition => {
+        const opcode = Opcode[`JP_${condition.name}_imm16`];
+
+        describe('when condition is met', () => {
+            it('sets PC to the correct address', () => {
+                const { cpu } = setupWithRomData([opcode, 0x34, 0x12]);
+                cpu.registers[condition.flag] = condition.trueValue;
+
+                cpu.step();
+
+                expect(cpu.registers.pc).toBe(0x1234);
+            });
+        });
+
+        describe('when condition is not met', () => {
+            it('increments PC', () => {
+                const { cpu } = setupWithRomData([opcode, 0x34, 0x12]);
+                cpu.registers[condition.flag] = condition.trueValue ^ 1;
+
+                cpu.step();
+
+                expect(cpu.registers.pc).toBe(0x103);
+            });
+        });
+    });
+});
+
+describe('when executing JP HL', () => {
+    it('sets PC to the value in HL', () => {
+        const { cpu } = setupWithRomData([Opcode.JP_HL]);
+        cpu.registers.hl = 0x1234;
+
+        cpu.step();
+
+        expect(cpu.registers.pc).toBe(0x1234);
+    });
+});
