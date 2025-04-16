@@ -282,3 +282,14 @@ export const rstOpcodes = [
     Opcode.RST_30H,
     Opcode.RST_38H,
 ];
+
+export enum PrefixedOpcode {
+    RLC_B = 0x00,
+    RLC_C = 0x01,
+    RLC_D = 0x02,
+    RLC_E = 0x03,
+    RLC_H = 0x04,
+    RLC_L = 0x05,
+    RLC_pHL = 0x06,
+    RLC_A = 0x07,
+}

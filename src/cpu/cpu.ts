@@ -1,7 +1,7 @@
 import { memoryLayout } from '../memory/gbMemoryBus';
 import { MemoryBus } from '../memory/memoryBus';
 import { CpuRegisters } from './cpuRegisters';
-import { Opcode, rstOpcodes } from './opcodes';
+import { Opcode, PrefixedOpcode, rstOpcodes } from './opcodes';
 import { Word16 } from './word16';
 
 export const r8Registers = ['b', 'c', 'd', 'e', 'h', 'l', '[hl]', 'a'] as const;
@@ -14,7 +14,7 @@ export const conditions = ['NZ', 'Z', 'NC', 'C'] as const;
 export class Cpu {
     public memoryBus: MemoryBus;
     public registers = new CpuRegisters();
-    private opcodeTable = new Map<number, (cpu: Cpu) => void>();
+    private opcodeTable = new Map<Opcode, (cpu: Cpu) => void>();
     public ime = false;
     private enableImeAfter = 0;
 
@@ -96,6 +96,7 @@ export class Cpu {
 
 function generateOpcodeTable() {
     const table = new Map<Opcode, (cpu: Cpu) => void>();
+    const prefixedOpcodeTable = generatePrefixedOpcodeTable();
 
     // NOP
     table.set(Opcode.NOP, () => {});
@@ -838,6 +839,41 @@ function generateOpcodeTable() {
     // handle DI
     table.set(Opcode.DI, cpu => {
         cpu.areInterruptsEnabled = false;
+    });
+
+    // handle prefixed instructions
+    table.set(Opcode.PREFIX_CB, cpu => {
+        const opcode = cpu.readNextByte();
+        const operation = prefixedOpcodeTable.get(opcode);
+
+        if (!operation) {
+            throw new Error(`Unknown prefixed opcode: ${opcode.toString(16)}`);
+        }
+
+        operation(cpu);
+    });
+
+    // TODO: handle STOP
+    // TODO: handle HALT
+
+    return table;
+}
+
+function generatePrefixedOpcodeTable() {
+    const table = new Map<Opcode, (cpu: Cpu) => void>();
+
+    // handle RLC r8
+    r8Registers.forEach((register, i) => {
+        table.set(PrefixedOpcode.RLC_B + i, cpu => {
+            const value = cpu.getR8Value(register);
+            const result = ((value << 1) | (value >> 7)) & 0xff;
+
+            cpu.setR8Value(register, result);
+            cpu.registers.zeroFlag = result === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.halfCarryFlag = 0;
+            cpu.registers.carryFlag = (value >> 7) & 1;
+        });
     });
 
     return table;
