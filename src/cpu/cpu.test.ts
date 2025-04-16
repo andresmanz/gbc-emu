@@ -3002,3 +3002,71 @@ describe('when executing ADD SP, imm8', () => {
         expect(cpu.registers.carryFlag).toBe(0);
     });
 });
+
+describe('when executing LD HL, SP+imm8', () => {
+    it('adds the signed positive value imm8 to SP and copies to HL', () => {
+        const { cpu } = setupWithRomData([Opcode.LD_HL_SP_imm8, 0x34]);
+        cpu.registers.sp = 0x1200;
+
+        cpu.step();
+
+        expect(cpu.registers.sp).toBe(0x1234);
+        expect(cpu.registers.hl).toBe(0x1234);
+    });
+
+    it('adds the signed negative value imm8 to SP and copies to HL', () => {
+        const { cpu } = setupWithRomData([Opcode.LD_HL_SP_imm8, 0x84]);
+        cpu.registers.sp = 0x1200; // 0x1200 + (-0x7c)
+
+        cpu.step();
+
+        expect(cpu.registers.sp).toBe(0x1184);
+        expect(cpu.registers.hl).toBe(0x1184);
+    });
+
+    it('clears the subtraction flag', () => {
+        const { cpu } = setupWithRomData([Opcode.LD_HL_SP_imm8, 0x34]);
+        cpu.registers.sp = 0x1200;
+
+        cpu.step();
+
+        expect(cpu.registers.subtractFlag).toBe(0);
+    });
+
+    it('sets the half carry flag if there was a half carry', () => {
+        const { cpu } = setupWithRomData([Opcode.LD_HL_SP_imm8, 0x01]);
+        cpu.registers.sp = 0x12ff;
+
+        cpu.step();
+
+        expect(cpu.registers.sp).toBe(0x1300);
+        expect(cpu.registers.halfCarryFlag).toBe(1);
+    });
+
+    it('clears the half carry flag if there was no half carry', () => {
+        const { cpu } = setupWithRomData([Opcode.LD_HL_SP_imm8, 0x00]);
+        cpu.registers.sp = 0x12ff;
+
+        cpu.step();
+
+        expect(cpu.registers.halfCarryFlag).toBe(0);
+    });
+
+    it('sets the carry flag if there was a carry', () => {
+        const { cpu } = setupWithRomData([Opcode.LD_HL_SP_imm8, 0x01]);
+        cpu.registers.sp = 0xffff;
+
+        cpu.step();
+
+        expect(cpu.registers.carryFlag).toBe(1);
+    });
+
+    it('clears the carry flag if there was no carry', () => {
+        const { cpu } = setupWithRomData([Opcode.LD_HL_SP_imm8, 0x00]);
+        cpu.registers.sp = 0xffff;
+
+        cpu.step();
+
+        expect(cpu.registers.carryFlag).toBe(0);
+    });
+});

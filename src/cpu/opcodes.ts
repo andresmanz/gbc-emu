@@ -262,7 +262,7 @@ export enum Opcode {
     PUSH_AF = 0xf5,
     OR_A_imm8 = 0xf6,
     RST_30H = 0xf7,
-    LD_HL_SP_r8 = 0xf8,
+    LD_HL_SP_imm8 = 0xf8,
     LD_SP_HL = 0xf9,
     LD_A_p16 = 0xfa,
     EI = 0xfb,

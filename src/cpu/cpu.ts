@@ -804,7 +804,7 @@ function generateOpcodeTable() {
     });
 
     // handle ADD SP, imm8
-    table.set(Opcode.ADD_SP_imm8, cpu => {
+    const executeAddSpImm8 = (cpu: Cpu) => {
         const signedValue = (cpu.readNextByte() << 24) >> 24;
         const sum = cpu.registers.sp + signedValue;
 
@@ -814,6 +814,15 @@ function generateOpcodeTable() {
         cpu.registers.carryFlag = sum > 0xffff ? 1 : 0;
         cpu.registers.zeroFlag = cpu.registers.sp === 0 ? 1 : 0;
         cpu.registers.subtractFlag = 0;
+    };
+
+    // handle ADD SP, imm8
+    table.set(Opcode.ADD_SP_imm8, executeAddSpImm8);
+
+    // handle LD HL, SP+imm8
+    table.set(Opcode.LD_HL_SP_imm8, cpu => {
+        executeAddSpImm8(cpu);
+        cpu.registers.hl = cpu.registers.sp;
     });
 
     // handle EI
