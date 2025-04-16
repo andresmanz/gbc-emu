@@ -3148,3 +3148,70 @@ describe.for(r8Registers)('RLC %s', register => {
         expect(cpu.registers.carryFlag).toBe(0);
     });
 });
+
+describe.for(r8Registers)('RRC %s', register => {
+    const opcode = PrefixedOpcode.RRC_B + r8Registers.indexOf(register);
+
+    it('rotates right', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b11010100);
+
+        cpu.step();
+
+        expect(cpu.getR8Value(register)).toBe(0b01101010);
+    });
+
+    it('sets the zero flag if result is 0', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b00000000);
+
+        cpu.step();
+
+        expect(cpu.registers.zeroFlag).toBe(1);
+    });
+
+    it('clears the zero flag if result is not 0', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b10000000);
+
+        cpu.step();
+
+        expect(cpu.registers.zeroFlag).toBe(0);
+    });
+
+    it('clears the subtraction flag', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b00000001);
+
+        cpu.step();
+
+        expect(cpu.registers.subtractFlag).toBe(0);
+    });
+
+    it('clears the half carry flag', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b10000000);
+
+        cpu.step();
+
+        expect(cpu.registers.halfCarryFlag).toBe(0);
+    });
+
+    it('sets the carry flag if there is a carry', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b10000001);
+
+        cpu.step();
+
+        expect(cpu.registers.carryFlag).toBe(1);
+    });
+
+    it('clears the carry flag if there is a carry', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b10000000);
+
+        cpu.step();
+
+        expect(cpu.registers.carryFlag).toBe(0);
+    });
+});
