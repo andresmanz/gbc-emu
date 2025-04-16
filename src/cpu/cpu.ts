@@ -791,6 +791,18 @@ function generateOpcodeTable() {
         cpu.registers.a = cpu.memoryBus.read(address);
     });
 
+    // handle LD [imm16], A
+    table.set(Opcode.LD_p16_A, cpu => {
+        const address = cpu.readNextWord();
+        cpu.memoryBus.write(address, cpu.registers.a);
+    });
+
+    // handle LD A, [imm16]
+    table.set(Opcode.LD_A_p16, cpu => {
+        const address = cpu.readNextWord();
+        cpu.registers.a = cpu.memoryBus.read(address);
+    });
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();

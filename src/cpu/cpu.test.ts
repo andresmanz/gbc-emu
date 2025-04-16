@@ -2914,3 +2914,25 @@ describe('when executing LDH A, [C]', () => {
         expect(cpu.registers.a).toBe(0x34);
     });
 });
+
+describe('when executing LDH [imm16], A', () => {
+    it('sets the value at the correct address to the value in A', () => {
+        const { cpu } = setupWithRomData([Opcode.LD_p16_A, 0x34, 0x12]);
+        cpu.registers.a = 0x56;
+
+        cpu.step();
+
+        expect(cpu.memoryBus.read(0x1234)).toBe(0x56);
+    });
+});
+
+describe('when executing LDH A, [imm16]', () => {
+    it('sets A to the value at the correct address', () => {
+        const { cpu } = setupWithRomData([Opcode.LD_A_p16, 0x34, 0x12]);
+        cpu.memoryBus.write(0x1234, 0x56);
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0x56);
+    });
+});
