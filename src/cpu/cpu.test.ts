@@ -3070,3 +3070,14 @@ describe('when executing LD HL, SP+imm8', () => {
         expect(cpu.registers.carryFlag).toBe(0);
     });
 });
+
+describe('when executing LD SP, HL', () => {
+    it('sets SP to the value of HL', () => {
+        const { cpu } = setupWithRomData([Opcode.LD_SP_HL]);
+        cpu.registers.hl = 0x1234;
+
+        cpu.step();
+
+        expect(cpu.registers.sp).toBe(0x1234);
+    });
+});

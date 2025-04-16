@@ -825,6 +825,11 @@ function generateOpcodeTable() {
         cpu.registers.hl = cpu.registers.sp;
     });
 
+    // handle LD SP, HL
+    table.set(Opcode.LD_SP_HL, cpu => {
+        cpu.registers.sp = cpu.registers.hl;
+    });
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();
