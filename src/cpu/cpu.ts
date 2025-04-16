@@ -803,6 +803,19 @@ function generateOpcodeTable() {
         cpu.registers.a = cpu.memoryBus.read(address);
     });
 
+    // handle ADD SP, imm8
+    table.set(Opcode.ADD_SP_imm8, cpu => {
+        const signedValue = (cpu.readNextByte() << 24) >> 24;
+        const sum = cpu.registers.sp + signedValue;
+
+        cpu.registers.halfCarryFlag =
+            (cpu.registers.sp & 0xff) + signedValue > 0xff ? 1 : 0;
+        cpu.registers.sp = sum & 0xffff;
+        cpu.registers.carryFlag = sum > 0xffff ? 1 : 0;
+        cpu.registers.zeroFlag = cpu.registers.sp === 0 ? 1 : 0;
+        cpu.registers.subtractFlag = 0;
+    });
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();

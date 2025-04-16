@@ -245,7 +245,7 @@ export enum Opcode {
     PUSH_HL = 0xe5,
     AND_A_imm8 = 0xe6,
     RST_20H = 0xe7,
-    ADD_SP_r8 = 0xe8,
+    ADD_SP_imm8 = 0xe8,
     JP_HL = 0xe9,
     LD_p16_A = 0xea,
     /* 0xEB: unused */ UNUSED_EB = 0xeb,
