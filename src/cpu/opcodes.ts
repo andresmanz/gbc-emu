@@ -239,7 +239,7 @@ export enum Opcode {
 
     LDH_pa8_A = 0xe0,
     POP_HL = 0xe1,
-    LD_pC_A = 0xe2,
+    LDH_pC_A = 0xe2,
     /* 0xE3: unused */ UNUSED_E3 = 0xe3,
     /* 0xE4: unused */ UNUSED_E4 = 0xe4,
     PUSH_HL = 0xe5,
@@ -256,7 +256,7 @@ export enum Opcode {
 
     LDH_A_pa8 = 0xf0,
     POP_AF = 0xf1,
-    LD_A_pC = 0xf2,
+    LDH_A_pC = 0xf2,
     DI = 0xf3,
     /* 0xF4: unused */ UNUSED_F4 = 0xf4,
     PUSH_AF = 0xf5,

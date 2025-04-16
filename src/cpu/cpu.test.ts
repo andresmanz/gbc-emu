@@ -2870,7 +2870,7 @@ describe.for(r16StackRegisters)('when executing PUSH %s', register => {
 });
 
 describe('when executing LDH [imm16], A', () => {
-    it('correctly sets the value at the correct address', () => {
+    it('sets the value at the correct address to the value of A', () => {
         const { cpu } = setupWithRomData([Opcode.LDH_pa8_A, 0x12, 0xff]);
         cpu.registers.a = 0x34;
 
@@ -2886,5 +2886,50 @@ describe('when executing LDH [imm16], A', () => {
         cpu.step();
 
         expect(cpu.memoryBus.read(0x5512)).toBe(0x0);
+    });
+});
+
+describe('when executing LDH [C], A', () => {
+    it('sets the value at 0xff00 + C to the value in A', () => {
+        const { cpu } = setupWithRomData([Opcode.LDH_pC_A]);
+        cpu.registers.c = 0x24;
+        cpu.registers.a = 0x34;
+
+        cpu.step();
+
+        expect(cpu.memoryBus.read(0xff24)).toBe(0x34);
+    });
+});
+
+describe('when executing LDH A, [imm16]', () => {
+    it('sets A to the value at the correct address', () => {
+        const { cpu } = setupWithRomData([Opcode.LDH_A_pa8, 0x12, 0xff]);
+        cpu.memoryBus.write(0xff12, 0x34);
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0x34);
+    });
+
+    it('does not change the value if the address is not between 0xff00 and 0xffff', () => {
+        const { cpu } = setupWithRomData([Opcode.LDH_A_pa8, 0x12, 0x55]);
+        cpu.registers.a = 0;
+        cpu.memoryBus.write(0x5512, 0x34);
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0x0);
+    });
+});
+
+describe('when executing LDH A, [C]', () => {
+    it('sets A to the value at 0xff00 + C', () => {
+        const { cpu } = setupWithRomData([Opcode.LDH_A_pC]);
+        cpu.registers.c = 0x24;
+        cpu.memoryBus.write(0xff24, 0x34);
+
+        cpu.step();
+
+        expect(cpu.registers.a).toBe(0x34);
     });
 });

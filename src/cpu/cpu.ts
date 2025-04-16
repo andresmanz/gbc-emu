@@ -769,6 +769,27 @@ function generateOpcodeTable() {
         }
     });
 
+    // handle LDH [C], A
+    table.set(Opcode.LDH_pC_A, cpu => {
+        const address = 0xff00 + cpu.registers.c;
+        cpu.memoryBus.write(address, cpu.registers.a);
+    });
+
+    // handle LDH A, [imm16]
+    table.set(Opcode.LDH_A_pa8, cpu => {
+        const address = cpu.readNextWord();
+
+        if (address >= 0xff00 && address <= 0xffff) {
+            cpu.registers.a = cpu.memoryBus.read(address);
+        }
+    });
+
+    // handle LDH A, [C]
+    table.set(Opcode.LDH_A_pC, cpu => {
+        const address = 0xff00 + cpu.registers.c;
+        cpu.registers.a = cpu.memoryBus.read(address);
+    });
+
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();
