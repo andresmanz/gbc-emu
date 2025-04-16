@@ -1,3 +1,4 @@
+import { memoryLayout } from '../memory/gbMemoryBus';
 import { MemoryBus } from '../memory/memoryBus';
 import { CpuRegisters } from './cpuRegisters';
 import { Opcode, rstOpcodes } from './opcodes';
@@ -762,11 +763,12 @@ function generateOpcodeTable() {
 
     // handle LDH [imm16], A
     table.set(Opcode.LDH_pa8_A, cpu => {
-        const address = cpu.readNextWord();
+        const offset = cpu.readNextByte();
 
-        if (address >= 0xff00 && address <= 0xffff) {
-            cpu.memoryBus.write(address, cpu.registers.a);
-        }
+        cpu.memoryBus.write(
+            memoryLayout.ioRegistersStart + offset,
+            cpu.registers.a,
+        );
     });
 
     // handle LDH [C], A
@@ -777,11 +779,10 @@ function generateOpcodeTable() {
 
     // handle LDH A, [imm16]
     table.set(Opcode.LDH_A_pa8, cpu => {
-        const address = cpu.readNextWord();
-
-        if (address >= 0xff00 && address <= 0xffff) {
-            cpu.registers.a = cpu.memoryBus.read(address);
-        }
+        const offset = cpu.readNextByte();
+        cpu.registers.a = cpu.memoryBus.read(
+            memoryLayout.ioRegistersStart + offset,
+        );
     });
 
     // handle LDH A, [C]
