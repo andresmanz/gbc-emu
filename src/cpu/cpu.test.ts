@@ -3686,7 +3686,8 @@ describe.for(r8Registers)('SRL %s', register => {
 
 describe('BIT u3, %s', () => {
     function setupBitTest(r8: R8Register, bit: number, bitSet: boolean) {
-        const opcode = 0x40 + (bit << 3) + r8Registers.indexOf(r8);
+        const opcode =
+            PrefixedOpcode.BIT0_B + (bit << 3) + r8Registers.indexOf(r8);
         const romData = new Uint8Array([0xcb, opcode]);
         const cpu = setupWithRom(romData);
 
@@ -3719,6 +3720,68 @@ describe('BIT u3, %s', () => {
                 it(`always sets half-carry flag when testing bit ${bit} of ${r8}`, () => {
                     const cpu = setupBitTest(r8, bit, true);
                     expect(cpu.registers.halfCarryFlag).toBe(1);
+                });
+            });
+        }
+    }
+});
+
+describe('RES u3, %s', () => {
+    const expectedResults = [
+        0b11111110, 0b11111101, 0b11111011, 0b11110111, 0b11101111, 0b11011111,
+        0b10111111, 0b01111111,
+    ];
+
+    function setupBitTest(r8: R8Register, bit: number) {
+        const opcode =
+            PrefixedOpcode.RES0_B + (bit << 3) + r8Registers.indexOf(r8);
+        const romData = new Uint8Array([0xcb, opcode]);
+        const cpu = setupWithRom(romData);
+
+        cpu.setR8Value(r8, 0b11111111);
+
+        cpu.step();
+
+        return cpu;
+    }
+
+    for (let bit = 0; bit < 8; bit++) {
+        for (const r8 of r8Registers) {
+            describe(`RES ${bit}, ${r8}`, () => {
+                it(`sets bit ${bit} of ${r8} to 0`, () => {
+                    const cpu = setupBitTest(r8, bit);
+                    expect(cpu.getR8Value(r8)).toBe(expectedResults[bit]);
+                });
+            });
+        }
+    }
+});
+
+describe('SET u3, %s', () => {
+    const expectedResults = [
+        0b00000001, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000,
+        0b01000000, 0b10000000,
+    ];
+
+    function setupBitTest(r8: R8Register, bit: number) {
+        const opcode =
+            PrefixedOpcode.SET0_B + (bit << 3) + r8Registers.indexOf(r8);
+        const romData = new Uint8Array([0xcb, opcode]);
+        const cpu = setupWithRom(romData);
+
+        cpu.setR8Value(r8, 0b00000000);
+
+        cpu.step();
+
+        return cpu;
+    }
+
+    for (let bit = 0; bit < 8; bit++) {
+        for (const r8 of r8Registers) {
+            describe(`SET ${bit}, ${r8}`, () => {
+                it(`sets bit ${bit} of ${r8} to 1`, () => {
+                    const cpu = setupBitTest(r8, bit);
+                    expect(cpu.getR8Value(r8)).toBe(expectedResults[bit]);
                 });
             });
         }

@@ -984,7 +984,7 @@ function generatePrefixedOpcodeTable() {
     // handle BIT u3, r8
     for (let bit = 0; bit < 8; ++bit) {
         r8Registers.forEach((register, i) => {
-            const opcode = 0x40 + (bit << 3) + i;
+            const opcode = PrefixedOpcode.BIT0_B + (bit << 3) + i;
 
             table.set(opcode, cpu => {
                 const value = cpu.getR8Value(register);
@@ -993,6 +993,34 @@ function generatePrefixedOpcodeTable() {
                 cpu.registers.zeroFlag = result ^ 1;
                 cpu.registers.subtractFlag = 0;
                 cpu.registers.halfCarryFlag = 1;
+            });
+        });
+    }
+
+    // handle RES u3, r8
+    for (let bit = 0; bit < 8; ++bit) {
+        r8Registers.forEach((register, i) => {
+            const opcode = PrefixedOpcode.RES0_B + (bit << 3) + i;
+
+            table.set(opcode, cpu => {
+                const value = cpu.getR8Value(register);
+                const mask = ~(1 << bit);
+                const result = value & mask & 0xff;
+                cpu.setR8Value(register, result);
+            });
+        });
+    }
+
+    // handle SET u3, r8
+    for (let bit = 0; bit < 8; ++bit) {
+        r8Registers.forEach((register, i) => {
+            const opcode = PrefixedOpcode.SET0_B + (bit << 3) + i;
+
+            table.set(opcode, cpu => {
+                const value = cpu.getR8Value(register);
+                const mask = 1 << bit;
+                const result = (value | mask) & 0xff;
+                cpu.setR8Value(register, result);
             });
         });
     }
