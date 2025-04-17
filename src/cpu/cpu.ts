@@ -1,4 +1,8 @@
-import { memoryLayout } from '../memory/gbMemoryBus';
+import {
+    IE_REGISTER_ADDRESS,
+    IF_REGISTER_ADDRESS,
+    memoryLayout,
+} from '../memory/gbMemoryBus';
 import { MemoryBus } from '../memory/memoryBus';
 import { CpuRegisters } from './cpuRegisters';
 import { Opcode, PrefixedOpcode, rstOpcodes } from './opcodes';
@@ -11,11 +15,27 @@ export const r16Registers = ['bc', 'de', 'hl', 'sp'] as const;
 export const r16StackRegisters = ['bc', 'de', 'hl', 'af'] as const;
 export const conditions = ['NZ', 'Z', 'NC', 'C'] as const;
 
+export enum Interrupt {
+    VBlank = 0,
+    LCDStat = 1,
+    Timer = 2,
+    Serial = 3,
+    Joypad = 4,
+}
+
+export const interruptVectors: Record<Interrupt, number> = {
+    [Interrupt.VBlank]: 0x40,
+    [Interrupt.LCDStat]: 0x48,
+    [Interrupt.Timer]: 0x50,
+    [Interrupt.Serial]: 0x58,
+    [Interrupt.Joypad]: 0x60,
+};
+
 export class Cpu {
     public memoryBus: MemoryBus;
     public registers = new CpuRegisters();
     private opcodeTable = new Map<Opcode, (cpu: Cpu) => void>();
-    public ime = false;
+    private ime = false;
     private enableImeAfter = 0;
 
     constructor(memoryBus: MemoryBus) {
@@ -91,6 +111,14 @@ export class Cpu {
 
     requestImeEnable() {
         this.enableImeAfter = 2;
+    }
+
+    triggerInterrupt(interrupt: Interrupt) {
+        const ieValue = this.memoryBus.read(IE_REGISTER_ADDRESS);
+        const ifValue = this.memoryBus.read(IF_REGISTER_ADDRESS);
+
+        this.memoryBus.write(IE_REGISTER_ADDRESS, ieValue | (1 << interrupt));
+        this.memoryBus.write(IF_REGISTER_ADDRESS, ifValue | (1 << interrupt));
     }
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     Cpu,
+    Interrupt,
     r16Registers,
     r16StackRegisters,
     R8Register,
@@ -10,6 +11,10 @@ import { MemoryBus } from '../memory/memoryBus';
 import { Rom } from '../memory/rom';
 import { Opcode, PrefixedOpcode, rstOpcodes } from './opcodes';
 import { Word16 } from './word16';
+import {
+    IE_REGISTER_ADDRESS,
+    IF_REGISTER_ADDRESS,
+} from '../memory/gbMemoryBus';
 
 class MockMemoryBus implements MemoryBus {
     private memory: Uint8Array;
@@ -3786,4 +3791,54 @@ describe('SET u3, %s', () => {
             });
         }
     }
+});
+
+const interrupts = [
+    Interrupt.VBlank,
+    Interrupt.LCDStat,
+    Interrupt.Timer,
+    Interrupt.Serial,
+    Interrupt.Joypad,
+];
+
+describe('triggerInterrupt', () => {
+    describe.for(interrupts)('when triggering interrupt %s', interrupt => {
+        it('sets only the correct IE bit to 1', () => {
+            const { cpu } = setupWithRomData([]);
+
+            cpu.triggerInterrupt(interrupt);
+
+            expect(cpu.memoryBus.read(IE_REGISTER_ADDRESS)).toBe(
+                1 << interrupt,
+            );
+        });
+
+        it('sets only the correct IF bit to 1', () => {
+            const { cpu } = setupWithRomData([]);
+
+            cpu.triggerInterrupt(interrupt);
+
+            expect(cpu.memoryBus.read(IF_REGISTER_ADDRESS)).toBe(
+                1 << interrupt,
+            );
+        });
+    });
+
+    it('leaves the other IE bits alone', () => {
+        const { cpu } = setupWithRomData([]);
+        cpu.memoryBus.write(IE_REGISTER_ADDRESS, 0b01010101);
+
+        cpu.triggerInterrupt(Interrupt.LCDStat);
+
+        expect(cpu.memoryBus.read(IE_REGISTER_ADDRESS)).toBe(0b01010111);
+    });
+
+    it('leaves the other IF bits alone', () => {
+        const { cpu } = setupWithRomData([]);
+        cpu.memoryBus.write(IF_REGISTER_ADDRESS, 0b01010101);
+
+        cpu.triggerInterrupt(Interrupt.LCDStat);
+
+        expect(cpu.memoryBus.read(IF_REGISTER_ADDRESS)).toBe(0b01010111);
+    });
 });

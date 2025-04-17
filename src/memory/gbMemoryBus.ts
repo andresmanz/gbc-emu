@@ -22,6 +22,9 @@ export const memoryLayout = {
     interruptEnableEnd: 0xffff,
 } as const;
 
+export const IF_REGISTER_ADDRESS = 0xff0f;
+export const IE_REGISTER_ADDRESS = 0xffff;
+
 /**
  * For now, this is a non-CGB memory bus implementation.
  */
