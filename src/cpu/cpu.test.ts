@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     Cpu,
     Interrupt,
+    interruptVectors,
     r16Registers,
     r16StackRegisters,
     R8Register,
@@ -3840,5 +3841,90 @@ describe('triggerInterrupt', () => {
         cpu.triggerInterrupt(Interrupt.LCDStat);
 
         expect(cpu.memoryBus.read(IF_REGISTER_ADDRESS)).toBe(0b01010111);
+    });
+});
+
+describe('after triggering an interrupt', () => {
+    function setupWithInterruptTriggered(interrupt: Interrupt) {
+        const { cpu } = setupWithRomData([Opcode.NOP]);
+        cpu.triggerInterrupt(interrupt);
+        return cpu;
+    }
+
+    it('does not service interrupts when IME is false', () => {
+        const cpu = setupWithInterruptTriggered(Interrupt.LCDStat);
+        cpu.areInterruptsEnabled = false;
+
+        cpu.step();
+
+        expect(cpu.registers.pc).toBe(0x101);
+    });
+
+    describe('and IME is true', () => {
+        function setupWithInterruptTriggeredAndImeTrue(interrupt: Interrupt) {
+            const cpu = setupWithInterruptTriggered(interrupt);
+            cpu.areInterruptsEnabled = true;
+            return cpu;
+        }
+
+        for (const interrupt of interrupts) {
+            it('disables IME', () => {
+                const cpu = setupWithInterruptTriggeredAndImeTrue(interrupt);
+
+                cpu.step();
+
+                expect(cpu.areInterruptsEnabled).toBe(false);
+            });
+
+            it('pushes PC to the stack', () => {
+                const cpu = setupWithInterruptTriggeredAndImeTrue(interrupt);
+
+                cpu.step();
+
+                expect(readWordFromStack(cpu)).toBe(0x100);
+            });
+
+            it('jumps to the correct handler', () => {
+                const cpu = setupWithInterruptTriggeredAndImeTrue(interrupt);
+
+                cpu.step();
+
+                expect(cpu.registers.pc).toBe(interruptVectors[interrupt] + 1);
+            });
+
+            it('clears the corresponding bit from IF', () => {
+                const cpu = setupWithInterruptTriggeredAndImeTrue(interrupt);
+
+                cpu.step();
+
+                const bitValue =
+                    (cpu.memoryBus.read(IF_REGISTER_ADDRESS) >> interrupt) & 1;
+                expect(bitValue).toBe(0);
+            });
+        }
+    });
+});
+
+describe('when multiple interrupts are triggered', () => {
+    it('handles one after another with the correct priority', () => {
+        const { cpu } = setupWithRomData([Opcode.NOP]);
+        cpu.areInterruptsEnabled = true;
+
+        // trigger interrupts and setup handlers that simply return
+        for (const interrupt of interrupts) {
+            const address = interruptVectors[interrupt];
+            cpu.memoryBus.write(address, Opcode.NOP);
+            cpu.memoryBus.write(address + 1, Opcode.RETI);
+            cpu.triggerInterrupt(interrupt);
+        }
+
+        for (const interrupt of interrupts) {
+            // step; should jump to the handler
+            cpu.step();
+            expect(cpu.registers.pc).toBe(interruptVectors[interrupt] + 1);
+
+            // step to return and enable IME
+            cpu.step();
+        }
     });
 });

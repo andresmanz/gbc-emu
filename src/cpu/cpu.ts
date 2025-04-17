@@ -23,6 +23,14 @@ export enum Interrupt {
     Joypad = 4,
 }
 
+const interrupts = [
+    Interrupt.VBlank,
+    Interrupt.LCDStat,
+    Interrupt.Timer,
+    Interrupt.Serial,
+    Interrupt.Joypad,
+];
+
 export const interruptVectors: Record<Interrupt, number> = {
     [Interrupt.VBlank]: 0x40,
     [Interrupt.LCDStat]: 0x48,
@@ -50,6 +58,8 @@ export class Cpu {
     }
 
     step() {
+        this.checkAndServiceInterrupts();
+
         const opcode = this.readNextByte();
         const operation = this.opcodeTable.get(opcode);
 
@@ -119,6 +129,56 @@ export class Cpu {
 
         this.memoryBus.write(IE_REGISTER_ADDRESS, ieValue | (1 << interrupt));
         this.memoryBus.write(IF_REGISTER_ADDRESS, ifValue | (1 << interrupt));
+    }
+
+    private checkAndServiceInterrupts() {
+        if (!this.ime) {
+            return;
+        }
+
+        const ieValue = this.memoryBus.read(IE_REGISTER_ADDRESS);
+        const ifValue = this.memoryBus.read(IF_REGISTER_ADDRESS);
+        const pending = ieValue & ifValue;
+
+        if (pending === 0) {
+            // no interrupts pending
+            return;
+        }
+
+        // find the highest priority interrupt (lowest bit) and service it
+        for (const interrupt of interrupts) {
+            if ((pending & (1 << interrupt)) !== 0) {
+                this.serviceInterrupt(interrupt);
+                break;
+            }
+        }
+    }
+
+    private serviceInterrupt(interrupt: Interrupt) {
+        // disable further interrupts
+        this.ime = false;
+
+        // push PC to stack and jump to handler address
+        this.pushWordToStack(new Word16(this.registers.pc));
+        this.registers.pc = interruptVectors[interrupt];
+
+        this.clearInterruptFlag(interrupt);
+    }
+
+    private clearInterruptFlag(interrupt: Interrupt) {
+        const value = this.memoryBus.read(IF_REGISTER_ADDRESS);
+        this.memoryBus.write(IF_REGISTER_ADDRESS, value & ~(1 << interrupt));
+    }
+
+    pushWordToStack(word: Word16) {
+        this.memoryBus.write(--this.registers.sp, word.high);
+        this.memoryBus.write(--this.registers.sp, word.low);
+    }
+
+    popWordFromStack() {
+        const low = this.memoryBus.read(this.registers.sp++);
+        const high = this.memoryBus.read(this.registers.sp++);
+        return new Word16((high << 8) | low);
     }
 }
 
@@ -668,12 +728,8 @@ function generateOpcodeTable() {
         const targetAddressLow = cpu.readNextByte();
         const targetAddressHigh = cpu.readNextByte();
 
-        // store PC address on stack
-        const pcHigh = cpu.registers.pc >> 8;
-        const pcLow = cpu.registers.pc & 0xf;
-
-        cpu.memoryBus.write(--cpu.registers.sp, pcHigh);
-        cpu.memoryBus.write(--cpu.registers.sp, pcLow);
+        // store PC address on stack and jump to call address
+        cpu.pushWordToStack(new Word16(cpu.registers.pc));
         cpu.registers.pc = (targetAddressHigh << 8) | targetAddressLow;
     });
 
@@ -686,12 +742,8 @@ function generateOpcodeTable() {
             const targetAddressHigh = cpu.readNextByte();
 
             if (conditionChecks[condition](cpu)) {
-                // store PC address on stack
-                const pcHigh = cpu.registers.pc >> 8;
-                const pcLow = cpu.registers.pc & 0xf;
-
-                cpu.memoryBus.write(--cpu.registers.sp, pcHigh);
-                cpu.memoryBus.write(--cpu.registers.sp, pcLow);
+                // store PC address on stack and jump to call address
+                cpu.pushWordToStack(new Word16(cpu.registers.pc));
                 cpu.registers.pc = (targetAddressHigh << 8) | targetAddressLow;
             }
         });
@@ -699,10 +751,7 @@ function generateOpcodeTable() {
 
     // handle RET
     const executeReturn = (cpu: Cpu) => {
-        const newPcLow = cpu.memoryBus.read(cpu.registers.sp++);
-        const newPcHigh = cpu.memoryBus.read(cpu.registers.sp++);
-
-        cpu.registers.pc = (newPcHigh << 8) | newPcLow;
+        cpu.registers.pc = cpu.popWordFromStack().value;
     };
 
     table.set(Opcode.RET, executeReturn);
@@ -727,9 +776,7 @@ function generateOpcodeTable() {
     // handle RST vec
     for (const opcode of rstOpcodes) {
         table.set(opcode, cpu => {
-            const pc = new Word16(cpu.registers.pc);
-            cpu.memoryBus.write(--cpu.registers.sp, pc.high);
-            cpu.memoryBus.write(--cpu.registers.sp, pc.low);
+            cpu.pushWordToStack(new Word16(cpu.registers.pc));
             cpu.registers.pc = opcode & 0x38;
         });
     }
@@ -770,9 +817,7 @@ function generateOpcodeTable() {
         const opcode = Opcode[`PUSH_${regKey}`];
 
         table.set(opcode, cpu => {
-            const word = new Word16(cpu.registers[register]);
-            cpu.memoryBus.write(--cpu.registers.sp, word.high);
-            cpu.memoryBus.write(--cpu.registers.sp, word.low);
+            cpu.pushWordToStack(new Word16(cpu.registers[register]));
         });
     }
 
@@ -783,10 +828,7 @@ function generateOpcodeTable() {
         const opcode = Opcode[`POP_${regKey}`];
 
         table.set(opcode, cpu => {
-            const word = new Word16();
-            word.low = cpu.memoryBus.read(cpu.registers.sp++);
-            word.high = cpu.memoryBus.read(cpu.registers.sp++);
-            cpu.registers[register] = word.value;
+            cpu.registers[register] = cpu.popWordFromStack().value;
         });
     }
 
