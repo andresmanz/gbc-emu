@@ -922,5 +922,33 @@ function generatePrefixedOpcodeTable() {
         });
     });
 
+    // handle SLA r8
+    r8Registers.forEach((register, i) => {
+        table.set(PrefixedOpcode.SLA_B + i, cpu => {
+            const value = cpu.getR8Value(register);
+            const result = (value << 1) & 0xff;
+
+            cpu.setR8Value(register, result);
+            cpu.registers.zeroFlag = result === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.halfCarryFlag = 0;
+            cpu.registers.carryFlag = (value >> 7) & 1;
+        });
+    });
+
+    // handle SRA r8
+    r8Registers.forEach((register, i) => {
+        table.set(PrefixedOpcode.SRA_B + i, cpu => {
+            const value = cpu.getR8Value(register);
+            const result = ((value & 0b10000000) | (value >> 1)) & 0xff;
+
+            cpu.setR8Value(register, result);
+            cpu.registers.zeroFlag = result === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.halfCarryFlag = 0;
+            cpu.registers.carryFlag = value & 1;
+        });
+    });
+
     return table;
 }
