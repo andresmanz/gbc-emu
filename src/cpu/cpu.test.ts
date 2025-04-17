@@ -13,6 +13,7 @@ import { Rom } from '../memory/rom';
 import { Opcode, PrefixedOpcode, rstOpcodes } from './opcodes';
 import { Word16 } from './word16';
 import {
+    DIV_ADDRESS,
     IE_REGISTER_ADDRESS,
     IF_REGISTER_ADDRESS,
 } from '../memory/gbMemoryBus';
@@ -3927,4 +3928,21 @@ describe('when multiple interrupts are triggered', () => {
             cpu.step();
         }
     });
+});
+
+it('increments the divider register after 256 cycles', () => {
+    // ADC_A_pHL takes 8 cycles, so execute 32 times
+    const { cpu } = setupWithRomData(Array(32).fill(Opcode.ADC_A_pHL));
+
+    for (let i = 0; i < 31; ++i) {
+        cpu.step();
+    }
+
+    // should still be 0
+    expect(cpu.memoryBus.read(DIV_ADDRESS)).toBe(0);
+
+    // now it should increment
+    cpu.step();
+
+    expect(cpu.memoryBus.read(DIV_ADDRESS)).toBe(1);
 });

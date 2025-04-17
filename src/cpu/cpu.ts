@@ -1,11 +1,18 @@
 import {
+    DIV_ADDRESS,
     IE_REGISTER_ADDRESS,
     IF_REGISTER_ADDRESS,
     memoryLayout,
 } from '../memory/gbMemoryBus';
 import { MemoryBus } from '../memory/memoryBus';
 import { CpuRegisters } from './cpuRegisters';
-import { Opcode, PrefixedOpcode, rstOpcodes } from './opcodes';
+import {
+    getCyclesFor,
+    Opcode,
+    PrefixedOpcode,
+    prefixedOpcodeCycles,
+    rstOpcodes,
+} from './opcodes';
 import { Word16 } from './word16';
 
 export const r8Registers = ['b', 'c', 'd', 'e', 'h', 'l', '[hl]', 'a'] as const;
@@ -42,9 +49,10 @@ export const interruptVectors: Record<Interrupt, number> = {
 export class Cpu {
     public memoryBus: MemoryBus;
     public registers = new CpuRegisters();
-    private opcodeTable = new Map<Opcode, (cpu: Cpu) => void>();
+    private opcodeTable = new Map<Opcode, (cpu: Cpu) => number>();
     private ime = false;
     private enableImeAfter = 0;
+    private dividerCounter = 0;
 
     constructor(memoryBus: MemoryBus) {
         this.memoryBus = memoryBus;
@@ -67,7 +75,9 @@ export class Cpu {
             throw new Error(`Unknown opcode: ${opcode.toString(16)}`);
         }
 
-        operation(this);
+        // execute operation and get number of cycles (T-states)
+        const cycles = operation(this);
+        this.incrementDivider(cycles);
 
         // check if we need to enable interrupts
         if (this.enableImeAfter > 0) {
@@ -152,6 +162,8 @@ export class Cpu {
                 break;
             }
         }
+
+        this.incrementDivider(4);
     }
 
     private serviceInterrupt(interrupt: Interrupt) {
@@ -180,14 +192,19 @@ export class Cpu {
         const high = this.memoryBus.read(this.registers.sp++);
         return new Word16((high << 8) | low);
     }
+
+    private incrementDivider(cycles: number) {
+        this.dividerCounter = (this.dividerCounter + cycles) & 0xffff;
+        this.memoryBus.write(DIV_ADDRESS, this.dividerCounter >> 8);
+    }
 }
 
 function generateOpcodeTable() {
-    const table = new Map<Opcode, (cpu: Cpu) => void>();
+    const table = new Map<Opcode, (cpu: Cpu) => number>();
     const prefixedOpcodeTable = generatePrefixedOpcodeTable();
 
     // NOP
-    table.set(Opcode.NOP, () => {});
+    table.set(Opcode.NOP, () => getCyclesFor(Opcode.NOP));
 
     // generate LD r16, imm16 handlers
     const r16Registers = ['bc', 'de', 'hl', 'sp'] as const;
@@ -197,45 +214,57 @@ function generateOpcodeTable() {
         table.set(opcode, cpu => {
             const value = cpu.readNextWord();
             cpu.registers[r16Registers[i]] = value;
+
+            return getCyclesFor(opcode);
         });
     }
 
     // add LD [r16mem], a handlers
-    table.set(Opcode.LD_pBC_A, cpu =>
-        cpu.memoryBus.write(cpu.registers.bc, cpu.registers.a),
-    );
+    table.set(Opcode.LD_pBC_A, cpu => {
+        cpu.memoryBus.write(cpu.registers.bc, cpu.registers.a);
+        return getCyclesFor(Opcode.LD_pBC_A);
+    });
 
-    table.set(Opcode.LD_pDE_A, cpu =>
-        cpu.memoryBus.write(cpu.registers.de, cpu.registers.a),
-    );
+    table.set(Opcode.LD_pDE_A, cpu => {
+        cpu.memoryBus.write(cpu.registers.de, cpu.registers.a);
+        return getCyclesFor(Opcode.LD_pDE_A);
+    });
 
     table.set(Opcode.LD_pHLI_A, cpu => {
         cpu.memoryBus.write(cpu.registers.hl, cpu.registers.a);
         cpu.registers.hl++;
+        return getCyclesFor(Opcode.LD_pHLI_A);
     });
 
     table.set(Opcode.LD_pHLD_A, cpu => {
         cpu.memoryBus.write(cpu.registers.hl, cpu.registers.a);
         cpu.registers.hl--;
+        return getCyclesFor(Opcode.LD_pHLD_A);
     });
 
     // generate LD A, [r16mem] handlers
     table.set(Opcode.LD_A_pBC, cpu => {
         cpu.registers.a = cpu.memoryBus.read(cpu.registers.bc);
+        return getCyclesFor(Opcode.LD_A_pBC);
     });
 
     table.set(Opcode.LD_A_pDE, cpu => {
         cpu.registers.a = cpu.memoryBus.read(cpu.registers.de);
+        return getCyclesFor(Opcode.LD_A_pDE);
     });
 
     table.set(Opcode.LD_A_pHLI, cpu => {
         cpu.registers.a = cpu.memoryBus.read(cpu.registers.hl);
         cpu.registers.hl++;
+
+        return getCyclesFor(Opcode.LD_A_pHLI);
     });
 
     table.set(Opcode.LD_A_pHLD, cpu => {
         cpu.registers.a = cpu.memoryBus.read(cpu.registers.hl);
         cpu.registers.hl--;
+
+        return getCyclesFor(Opcode.LD_A_pHLD);
     });
 
     // handle LD [imm16], sp
@@ -244,6 +273,8 @@ function generateOpcodeTable() {
         const sp = cpu.registers.sp;
         cpu.memoryBus.write(address, sp & 0xff);
         cpu.memoryBus.write(address + 1, (sp >> 8) & 0xff);
+
+        return getCyclesFor(Opcode.LD_imm16_SP);
     });
 
     // generate INC r16 handlers
@@ -252,6 +283,8 @@ function generateOpcodeTable() {
 
         table.set(opcode, cpu => {
             cpu.registers[r16Registers[i]]++;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -261,12 +294,15 @@ function generateOpcodeTable() {
 
         table.set(opcode, cpu => {
             cpu.registers[r16Registers[i]]--;
+
+            return getCyclesFor(opcode);
         });
     }
 
     // generate ADD HL, r16 handlers
     for (let i = 0; i < r16Registers.length; i++) {
         const opcode = Opcode.ADD_HL_BC + i * 0x10;
+
         table.set(opcode, cpu => {
             const hl = cpu.registers.hl;
             const value = cpu.registers[r16Registers[i]];
@@ -277,6 +313,8 @@ function generateOpcodeTable() {
             cpu.registers.halfCarryFlag =
                 (hl & 0x0fff) + (value & 0x0fff) > 0x0fff ? 1 : 0;
             cpu.registers.carryFlag = sum > 0xffff ? 1 : 0;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -293,6 +331,8 @@ function generateOpcodeTable() {
             cpu.registers.zeroFlag = incrementedValue === 0 ? 1 : 0;
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = (value & 0xf) + 1 > 0xf ? 1 : 0;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -309,6 +349,8 @@ function generateOpcodeTable() {
             cpu.registers.zeroFlag = decrementedValue === 0 ? 1 : 0;
             cpu.registers.subtractFlag = 1;
             cpu.registers.halfCarryFlag = (value & 0xf) - 1 < 0 ? 1 : 0;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -319,6 +361,8 @@ function generateOpcodeTable() {
         table.set(opcode, cpu => {
             const value = cpu.readNextByte();
             cpu.setR8Value(r8Registers[i], value);
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -332,6 +376,8 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = 0;
         cpu.registers.carryFlag = carry;
+
+        return getCyclesFor(Opcode.RLCA);
     });
 
     // handle RRCA
@@ -344,6 +390,8 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = 0;
         cpu.registers.carryFlag = carry;
+
+        return getCyclesFor(Opcode.RRCA);
     });
 
     // handle RLA
@@ -356,6 +404,8 @@ function generateOpcodeTable() {
         cpu.registers.zeroFlag = 0;
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = 0;
+
+        return getCyclesFor(Opcode.RLA);
     });
 
     // handle RRA
@@ -368,6 +418,8 @@ function generateOpcodeTable() {
         cpu.registers.zeroFlag = 0;
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = 0;
+
+        return getCyclesFor(Opcode.RRA);
     });
 
     // handle DAA - info: https://blog.ollien.com/posts/gb-daa/
@@ -406,6 +458,8 @@ function generateOpcodeTable() {
         cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
         cpu.registers.halfCarryFlag = 0;
         cpu.registers.carryFlag = carry;
+
+        return getCyclesFor(Opcode.DAA);
     });
 
     // handle CPL
@@ -413,6 +467,8 @@ function generateOpcodeTable() {
         cpu.registers.a = ~cpu.registers.a & 0xff;
         cpu.registers.subtractFlag = 1;
         cpu.registers.halfCarryFlag = 1;
+
+        return getCyclesFor(Opcode.CPL);
     });
 
     // handle SCF
@@ -420,6 +476,8 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = 0;
         cpu.registers.carryFlag = 1;
+
+        return getCyclesFor(Opcode.SCF);
     });
 
     // handle CCF
@@ -427,12 +485,16 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = 0;
         cpu.registers.carryFlag = cpu.registers.carryFlag ? 0 : 1;
+
+        return getCyclesFor(Opcode.CCF);
     });
 
     // handle JR imm8
     table.set(Opcode.JR_imm8, cpu => {
         const offset = cpu.readNextSignedByte();
         cpu.registers.pc += offset;
+
+        return getCyclesFor(Opcode.JR_imm8);
     });
 
     // generate JR cond, imm8 handlers
@@ -452,6 +514,9 @@ function generateOpcodeTable() {
             if (conditionChecks[condition](cpu)) {
                 cpu.registers.pc += offset;
             }
+
+            // TODO specify branch
+            return getCyclesFor(opcode);
         });
     }
 
@@ -463,6 +528,8 @@ function generateOpcodeTable() {
             table.set(opcode, cpu => {
                 const value = cpu.getR8Value(r8Registers[j]);
                 cpu.setR8Value(r8Registers[i], value);
+
+                return getCyclesFor(opcode);
             });
         }
     }
@@ -483,6 +550,8 @@ function generateOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = newHalfCarryFlag;
             cpu.registers.carryFlag = sum > 0xff ? 1 : 0;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -503,6 +572,8 @@ function generateOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = newHalfCarryFlag;
             cpu.registers.carryFlag = sum > 0xff ? 1 : 0;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -522,6 +593,8 @@ function generateOpcodeTable() {
             cpu.registers.subtractFlag = 1;
             cpu.registers.halfCarryFlag = newHalfCarryFlag;
             cpu.registers.carryFlag = diff < 0 ? 1 : 0;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -542,6 +615,8 @@ function generateOpcodeTable() {
             cpu.registers.subtractFlag = 1;
             cpu.registers.halfCarryFlag = newHalfCarryFlag;
             cpu.registers.carryFlag = diff < 0 ? 1 : 0;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -558,6 +633,8 @@ function generateOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = 1;
             cpu.registers.carryFlag = 0;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -574,6 +651,8 @@ function generateOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = 0;
             cpu.registers.carryFlag = 0;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -590,6 +669,8 @@ function generateOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = 0;
             cpu.registers.carryFlag = 0;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -608,6 +689,8 @@ function generateOpcodeTable() {
             cpu.registers.subtractFlag = 1;
             cpu.registers.halfCarryFlag = newHalfCarryFlag;
             cpu.registers.carryFlag = diff < 0 ? 1 : 0;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -624,6 +707,8 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = newHalfCarryFlag;
         cpu.registers.carryFlag = sum > 0xff ? 1 : 0;
+
+        return getCyclesFor(Opcode.ADD_A_imm8);
     });
 
     // handle ADC A, imm8
@@ -640,6 +725,8 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = newHalfCarryFlag;
         cpu.registers.carryFlag = sum > 0xff ? 1 : 0;
+
+        return getCyclesFor(Opcode.ADC_A_imm8);
     });
 
     // handle SUB A, imm8
@@ -655,6 +742,8 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 1;
         cpu.registers.halfCarryFlag = newHalfCarryFlag;
         cpu.registers.carryFlag = diff < 0 ? 1 : 0;
+
+        return getCyclesFor(Opcode.SUB_A_imm8);
     });
 
     // handle SBC A, imm8
@@ -671,6 +760,8 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 1;
         cpu.registers.halfCarryFlag = newHalfCarryFlag;
         cpu.registers.carryFlag = diff < 0 ? 1 : 0;
+
+        return getCyclesFor(Opcode.SBC_A_imm8);
     });
 
     // handle AND A, imm8
@@ -683,6 +774,8 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = 1;
         cpu.registers.carryFlag = 0;
+
+        return getCyclesFor(Opcode.AND_A_imm8);
     });
 
     // handle XOR A, imm8
@@ -695,6 +788,8 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = 0;
         cpu.registers.carryFlag = 0;
+
+        return getCyclesFor(Opcode.XOR_A_imm8);
     });
 
     // handle OR A, imm8
@@ -707,6 +802,8 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 0;
         cpu.registers.halfCarryFlag = 0;
         cpu.registers.carryFlag = 0;
+
+        return getCyclesFor(Opcode.OR_A_imm8);
     });
 
     // handle CP A, imm8
@@ -721,6 +818,8 @@ function generateOpcodeTable() {
         cpu.registers.subtractFlag = 1;
         cpu.registers.halfCarryFlag = newHalfCarryFlag;
         cpu.registers.carryFlag = diff < 0 ? 1 : 0;
+
+        return getCyclesFor(Opcode.CP_A_imm8);
     });
 
     // handle CALL imm16
@@ -731,6 +830,8 @@ function generateOpcodeTable() {
         // store PC address on stack and jump to call address
         cpu.pushWordToStack(new Word16(cpu.registers.pc));
         cpu.registers.pc = (targetAddressHigh << 8) | targetAddressLow;
+
+        return getCyclesFor(Opcode.CALL_imm16);
     });
 
     // handle CALL cond, imm16
@@ -746,6 +847,8 @@ function generateOpcodeTable() {
                 cpu.pushWordToStack(new Word16(cpu.registers.pc));
                 cpu.registers.pc = (targetAddressHigh << 8) | targetAddressLow;
             }
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -754,12 +857,17 @@ function generateOpcodeTable() {
         cpu.registers.pc = cpu.popWordFromStack().value;
     };
 
-    table.set(Opcode.RET, executeReturn);
+    table.set(Opcode.RET, cpu => {
+        executeReturn(cpu);
+        return getCyclesFor(Opcode.RET);
+    });
 
     // handle RETI
     table.set(Opcode.RETI, cpu => {
         executeReturn(cpu);
         cpu.areInterruptsEnabled = true;
+
+        return getCyclesFor(Opcode.RETI);
     });
 
     // handle RET cond
@@ -769,7 +877,10 @@ function generateOpcodeTable() {
         table.set(opcode, cpu => {
             if (conditionChecks[condition](cpu)) {
                 executeReturn(cpu);
+                return getCyclesFor(opcode, 0);
             }
+
+            return getCyclesFor(opcode, 1);
         });
     }
 
@@ -778,6 +889,8 @@ function generateOpcodeTable() {
         table.set(opcode, cpu => {
             cpu.pushWordToStack(new Word16(cpu.registers.pc));
             cpu.registers.pc = opcode & 0x38;
+
+            return getCyclesFor(opcode);
         });
     }
 
@@ -786,8 +899,9 @@ function generateOpcodeTable() {
         const address = new Word16();
         address.low = cpu.readNextByte();
         address.high = cpu.readNextByte();
-
         cpu.registers.pc = address.value;
+
+        return getCyclesFor(Opcode.JP_imm16);
     });
 
     // handle JP cond, imm16
@@ -801,13 +915,18 @@ function generateOpcodeTable() {
 
             if (conditionChecks[condition](cpu)) {
                 cpu.registers.pc = address.value;
+
+                return getCyclesFor(opcode, 0);
             }
+
+            return getCyclesFor(opcode, 1);
         });
     }
 
     // handle JP HL
     table.set(Opcode.JP_HL, cpu => {
         cpu.registers.pc = cpu.registers.hl;
+        return getCyclesFor(Opcode.JP_HL);
     });
 
     // handle PUSH r16
@@ -818,6 +937,7 @@ function generateOpcodeTable() {
 
         table.set(opcode, cpu => {
             cpu.pushWordToStack(new Word16(cpu.registers[register]));
+            return getCyclesFor(opcode);
         });
     }
 
@@ -829,6 +949,7 @@ function generateOpcodeTable() {
 
         table.set(opcode, cpu => {
             cpu.registers[register] = cpu.popWordFromStack().value;
+            return getCyclesFor(opcode);
         });
     }
 
@@ -840,12 +961,16 @@ function generateOpcodeTable() {
             memoryLayout.ioRegistersStart + offset,
             cpu.registers.a,
         );
+
+        return getCyclesFor(Opcode.LDH_pa8_A);
     });
 
     // handle LDH [C], A
     table.set(Opcode.LDH_pC_A, cpu => {
         const address = 0xff00 + cpu.registers.c;
         cpu.memoryBus.write(address, cpu.registers.a);
+
+        return getCyclesFor(Opcode.LDH_pC_A);
     });
 
     // handle LDH A, [imm16]
@@ -854,24 +979,32 @@ function generateOpcodeTable() {
         cpu.registers.a = cpu.memoryBus.read(
             memoryLayout.ioRegistersStart + offset,
         );
+
+        return getCyclesFor(Opcode.LDH_A_pa8);
     });
 
     // handle LDH A, [C]
     table.set(Opcode.LDH_A_pC, cpu => {
         const address = 0xff00 + cpu.registers.c;
         cpu.registers.a = cpu.memoryBus.read(address);
+
+        return getCyclesFor(Opcode.LDH_A_pC);
     });
 
     // handle LD [imm16], A
     table.set(Opcode.LD_p16_A, cpu => {
         const address = cpu.readNextWord();
         cpu.memoryBus.write(address, cpu.registers.a);
+
+        return getCyclesFor(Opcode.LD_p16_A);
     });
 
     // handle LD A, [imm16]
     table.set(Opcode.LD_A_p16, cpu => {
         const address = cpu.readNextWord();
         cpu.registers.a = cpu.memoryBus.read(address);
+
+        return getCyclesFor(Opcode.LD_A_p16);
     });
 
     // handle ADD SP, imm8
@@ -888,27 +1021,38 @@ function generateOpcodeTable() {
     };
 
     // handle ADD SP, imm8
-    table.set(Opcode.ADD_SP_imm8, executeAddSpImm8);
+    table.set(Opcode.ADD_SP_imm8, cpu => {
+        executeAddSpImm8(cpu);
+        return getCyclesFor(Opcode.ADD_SP_imm8);
+    });
 
     // handle LD HL, SP+imm8
     table.set(Opcode.LD_HL_SP_imm8, cpu => {
         executeAddSpImm8(cpu);
         cpu.registers.hl = cpu.registers.sp;
+
+        return getCyclesFor(Opcode.LD_HL_SP_imm8);
     });
 
     // handle LD SP, HL
     table.set(Opcode.LD_SP_HL, cpu => {
         cpu.registers.sp = cpu.registers.hl;
+
+        return getCyclesFor(Opcode.LD_SP_HL);
     });
 
     // handle EI
     table.set(Opcode.EI, cpu => {
         cpu.requestImeEnable();
+
+        return getCyclesFor(Opcode.EI);
     });
 
     // handle DI
     table.set(Opcode.DI, cpu => {
         cpu.areInterruptsEnabled = false;
+
+        return getCyclesFor(Opcode.DI);
     });
 
     // handle prefixed instructions
@@ -920,7 +1064,7 @@ function generateOpcodeTable() {
             throw new Error(`Unknown prefixed opcode: ${opcode.toString(16)}`);
         }
 
-        operation(cpu);
+        return operation(cpu);
     });
 
     // TODO: handle HALT
@@ -931,11 +1075,13 @@ function generateOpcodeTable() {
 }
 
 function generatePrefixedOpcodeTable() {
-    const table = new Map<Opcode, (cpu: Cpu) => void>();
+    const table = new Map<PrefixedOpcode, (cpu: Cpu) => number>();
 
     // handle RLC r8
     r8Registers.forEach((register, i) => {
-        table.set(PrefixedOpcode.RLC_B + i, cpu => {
+        const opcode = (PrefixedOpcode.RLC_B + i) as PrefixedOpcode;
+
+        table.set(opcode, cpu => {
             const value = cpu.getR8Value(register);
             const result = ((value << 1) | (value >> 7)) & 0xff;
 
@@ -944,12 +1090,16 @@ function generatePrefixedOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = 0;
             cpu.registers.carryFlag = (value >> 7) & 1;
+
+            return prefixedOpcodeCycles[opcode];
         });
     });
 
     // handle RRC r8
     r8Registers.forEach((register, i) => {
-        table.set(PrefixedOpcode.RRC_B + i, cpu => {
+        const opcode = (PrefixedOpcode.RRC_B + i) as PrefixedOpcode;
+
+        table.set(opcode, cpu => {
             const value = cpu.getR8Value(register);
             const result = ((value >> 1) | (value << 7)) & 0xff;
 
@@ -958,12 +1108,16 @@ function generatePrefixedOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = 0;
             cpu.registers.carryFlag = value & 1;
+
+            return prefixedOpcodeCycles[opcode];
         });
     });
 
     // handle RL r8
     r8Registers.forEach((register, i) => {
-        table.set(PrefixedOpcode.RL_B + i, cpu => {
+        const opcode = (PrefixedOpcode.RL_B + i) as PrefixedOpcode;
+
+        table.set(opcode, cpu => {
             const value = cpu.getR8Value(register);
             const result =
                 (((value << 1) | (value >> 7)) & 0xff) |
@@ -974,12 +1128,16 @@ function generatePrefixedOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = 0;
             cpu.registers.carryFlag = (value >> 7) & 1;
+
+            return prefixedOpcodeCycles[opcode];
         });
     });
 
     // handle RR r8
     r8Registers.forEach((register, i) => {
-        table.set(PrefixedOpcode.RR_B + i, cpu => {
+        const opcode = (PrefixedOpcode.RR_B + i) as PrefixedOpcode;
+
+        table.set(opcode, cpu => {
             const value = cpu.getR8Value(register);
             const result =
                 (((value >> 1) | (value << 7)) & 0xff) |
@@ -990,12 +1148,16 @@ function generatePrefixedOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = 0;
             cpu.registers.carryFlag = value & 1;
+
+            return prefixedOpcodeCycles[opcode];
         });
     });
 
     // handle SLA r8
     r8Registers.forEach((register, i) => {
-        table.set(PrefixedOpcode.SLA_B + i, cpu => {
+        const opcode = (PrefixedOpcode.SLA_B + i) as PrefixedOpcode;
+
+        table.set(opcode, cpu => {
             const value = cpu.getR8Value(register);
             const result = (value << 1) & 0xff;
 
@@ -1004,12 +1166,16 @@ function generatePrefixedOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = 0;
             cpu.registers.carryFlag = (value >> 7) & 1;
+
+            return prefixedOpcodeCycles[opcode];
         });
     });
 
     // handle SRA r8
     r8Registers.forEach((register, i) => {
-        table.set(PrefixedOpcode.SRA_B + i, cpu => {
+        const opcode = (PrefixedOpcode.SRA_B + i) as PrefixedOpcode;
+
+        table.set(opcode, cpu => {
             const value = cpu.getR8Value(register);
             const result = ((value & 0b10000000) | (value >> 1)) & 0xff;
 
@@ -1018,12 +1184,16 @@ function generatePrefixedOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = 0;
             cpu.registers.carryFlag = value & 1;
+
+            return prefixedOpcodeCycles[opcode];
         });
     });
 
     // handle SWAP r8
     r8Registers.forEach((register, i) => {
-        table.set(PrefixedOpcode.SWAP_B + i, cpu => {
+        const opcode = (PrefixedOpcode.SWAP_B + i) as PrefixedOpcode;
+
+        table.set(opcode, cpu => {
             const value = cpu.getR8Value(register);
             const low = value & 0xf;
             const high = value >> 4;
@@ -1034,12 +1204,16 @@ function generatePrefixedOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = 0;
             cpu.registers.carryFlag = 0;
+
+            return prefixedOpcodeCycles[opcode];
         });
     });
 
     // handle SRL r8
     r8Registers.forEach((register, i) => {
-        table.set(PrefixedOpcode.SRL_B + i, cpu => {
+        const opcode = (PrefixedOpcode.SRL_B + i) as PrefixedOpcode;
+
+        table.set(opcode, cpu => {
             const value = cpu.getR8Value(register);
             const result = (value >> 1) & 0xff;
 
@@ -1048,13 +1222,17 @@ function generatePrefixedOpcodeTable() {
             cpu.registers.subtractFlag = 0;
             cpu.registers.halfCarryFlag = 0;
             cpu.registers.carryFlag = value & 1;
+
+            return prefixedOpcodeCycles[opcode];
         });
     });
 
     // handle BIT u3, r8
     for (let bit = 0; bit < 8; ++bit) {
         r8Registers.forEach((register, i) => {
-            const opcode = PrefixedOpcode.BIT0_B + (bit << 3) + i;
+            const opcode = (PrefixedOpcode.BIT0_B +
+                (bit << 3) +
+                i) as PrefixedOpcode;
 
             table.set(opcode, cpu => {
                 const value = cpu.getR8Value(register);
@@ -1063,6 +1241,8 @@ function generatePrefixedOpcodeTable() {
                 cpu.registers.zeroFlag = result ^ 1;
                 cpu.registers.subtractFlag = 0;
                 cpu.registers.halfCarryFlag = 1;
+
+                return prefixedOpcodeCycles[opcode];
             });
         });
     }
@@ -1070,13 +1250,17 @@ function generatePrefixedOpcodeTable() {
     // handle RES u3, r8
     for (let bit = 0; bit < 8; ++bit) {
         r8Registers.forEach((register, i) => {
-            const opcode = PrefixedOpcode.RES0_B + (bit << 3) + i;
+            const opcode = (PrefixedOpcode.RES0_B +
+                (bit << 3) +
+                i) as PrefixedOpcode;
 
             table.set(opcode, cpu => {
                 const value = cpu.getR8Value(register);
                 const mask = ~(1 << bit);
                 const result = value & mask & 0xff;
                 cpu.setR8Value(register, result);
+
+                return prefixedOpcodeCycles[opcode];
             });
         });
     }
@@ -1084,13 +1268,17 @@ function generatePrefixedOpcodeTable() {
     // handle SET u3, r8
     for (let bit = 0; bit < 8; ++bit) {
         r8Registers.forEach((register, i) => {
-            const opcode = PrefixedOpcode.SET0_B + (bit << 3) + i;
+            const opcode = (PrefixedOpcode.SET0_B +
+                (bit << 3) +
+                i) as PrefixedOpcode;
 
             table.set(opcode, cpu => {
                 const value = cpu.getR8Value(register);
                 const mask = 1 << bit;
                 const result = (value | mask) & 0xff;
                 cpu.setR8Value(register, result);
+
+                return prefixedOpcodeCycles[opcode];
             });
         });
     }

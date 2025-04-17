@@ -24,6 +24,10 @@ export const memoryLayout = {
 
 export const IF_REGISTER_ADDRESS = 0xff0f;
 export const IE_REGISTER_ADDRESS = 0xffff;
+export const DIV_ADDRESS = 0xff04;
+export const TIMA_ADDRESS = 0xff05;
+export const TMA_ADDRESS = 0xff06;
+export const TAC_ADDRESS = 0xff07;
 
 /**
  * For now, this is a non-CGB memory bus implementation.
