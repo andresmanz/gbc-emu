@@ -3558,3 +3558,128 @@ describe.for(r8Registers)('SRA %s', register => {
         expect(cpu.registers.carryFlag).toBe(0);
     });
 });
+
+describe.for(r8Registers)('SWAP %s', register => {
+    const opcode = PrefixedOpcode.SWAP_B + r8Registers.indexOf(register);
+
+    it('swaps the upper and lower 4 bits', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b00001111);
+
+        cpu.step();
+
+        expect(cpu.getR8Value(register)).toBe(0b11110000);
+    });
+
+    it('sets the zero flag if result is 0', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b00000000);
+
+        cpu.step();
+
+        expect(cpu.registers.zeroFlag).toBe(1);
+    });
+
+    it('clears the zero flag if result is not 0', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b10000000);
+
+        cpu.step();
+
+        expect(cpu.registers.zeroFlag).toBe(0);
+    });
+
+    it('clears the subtract flag', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b10000000);
+
+        cpu.step();
+
+        expect(cpu.registers.subtractFlag).toBe(0);
+    });
+
+    it('clears the half carry flag', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b10000000);
+
+        cpu.step();
+
+        expect(cpu.registers.halfCarryFlag).toBe(0);
+    });
+
+    it('clears the carry flag', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b10000000);
+
+        cpu.step();
+
+        expect(cpu.registers.carryFlag).toBe(0);
+    });
+});
+
+describe.for(r8Registers)('SRL %s', register => {
+    const opcode = PrefixedOpcode.SRL_B + r8Registers.indexOf(register);
+
+    it('shifts right and sets bit 7 to 0', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b11010100);
+
+        cpu.step();
+
+        expect(cpu.getR8Value(register)).toBe(0b01101010);
+    });
+
+    it('sets the zero flag if result is 0', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b00000000);
+
+        cpu.step();
+
+        expect(cpu.registers.zeroFlag).toBe(1);
+    });
+
+    it('clears the zero flag if result is not 0', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b10000000);
+
+        cpu.step();
+
+        expect(cpu.registers.zeroFlag).toBe(0);
+    });
+
+    it('clears the subtraction flag', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b00000001);
+
+        cpu.step();
+
+        expect(cpu.registers.subtractFlag).toBe(0);
+    });
+
+    it('clears the half carry flag', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b00000001);
+
+        cpu.step();
+
+        expect(cpu.registers.halfCarryFlag).toBe(0);
+    });
+
+    it('sets the carry flag if there is a carry', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b00000001);
+
+        cpu.step();
+
+        expect(cpu.registers.carryFlag).toBe(1);
+    });
+
+    it('clears the carry flag if there is no carry', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0b10000000);
+
+        cpu.step();
+
+        expect(cpu.registers.carryFlag).toBe(0);
+    });
+});

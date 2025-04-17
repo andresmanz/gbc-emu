@@ -950,5 +950,35 @@ function generatePrefixedOpcodeTable() {
         });
     });
 
+    // handle SWAP r8
+    r8Registers.forEach((register, i) => {
+        table.set(PrefixedOpcode.SWAP_B + i, cpu => {
+            const value = cpu.getR8Value(register);
+            const low = value & 0xf;
+            const high = value >> 4;
+            const result = ((low << 4) | high) & 0xff;
+
+            cpu.setR8Value(register, result);
+            cpu.registers.zeroFlag = result === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.halfCarryFlag = 0;
+            cpu.registers.carryFlag = 0;
+        });
+    });
+
+    // handle SRL r8
+    r8Registers.forEach((register, i) => {
+        table.set(PrefixedOpcode.SRL_B + i, cpu => {
+            const value = cpu.getR8Value(register);
+            const result = (value >> 1) & 0xff;
+
+            cpu.setR8Value(register, result);
+            cpu.registers.zeroFlag = result === 0 ? 1 : 0;
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.halfCarryFlag = 0;
+            cpu.registers.carryFlag = value & 1;
+        });
+    });
+
     return table;
 }
