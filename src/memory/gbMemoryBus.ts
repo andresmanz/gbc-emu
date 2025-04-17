@@ -2,6 +2,7 @@ import { MemoryFunctionMap } from './memoryFunctionMap';
 import { Rom } from './rom';
 import { Ram } from './ram';
 import { MemoryBus } from './memoryBus';
+import { Timer } from '../timer';
 
 export const memoryLayout = {
     romStart: 0x0000,
@@ -38,7 +39,7 @@ export class GbMemoryBus implements MemoryBus {
     private workRam: Ram = new Ram(new Uint8Array(0x2000)); // 8KB of WRAM
     private functionMap: MemoryFunctionMap = new MemoryFunctionMap();
 
-    constructor() {
+    constructor(private timer: Timer) {
         // Initialize the memory bus with default mappings
         this.functionMap.map({
             start: memoryLayout.romStart,
@@ -64,6 +65,13 @@ export class GbMemoryBus implements MemoryBus {
             end: memoryLayout.workRamEnd,
             read: this.workRam.read,
             write: this.workRam.write,
+        });
+
+        this.functionMap.map({
+            start: DIV_ADDRESS,
+            end: DIV_ADDRESS,
+            read: () => this.timer.div,
+            write: this.timer.resetDiv,
         });
     }
 

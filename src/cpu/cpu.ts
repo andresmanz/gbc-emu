@@ -1,10 +1,10 @@
 import {
-    DIV_ADDRESS,
     IE_REGISTER_ADDRESS,
     IF_REGISTER_ADDRESS,
     memoryLayout,
 } from '../memory/gbMemoryBus';
 import { MemoryBus } from '../memory/memoryBus';
+import { Timer } from '../timer';
 import { CpuRegisters } from './cpuRegisters';
 import {
     getCyclesFor,
@@ -52,9 +52,11 @@ export class Cpu {
     private opcodeTable = new Map<Opcode, (cpu: Cpu) => number>();
     private ime = false;
     private enableImeAfter = 0;
-    private dividerCounter = 0;
 
-    constructor(memoryBus: MemoryBus) {
+    constructor(
+        memoryBus: MemoryBus,
+        private timer: Timer,
+    ) {
         this.memoryBus = memoryBus;
         this.reset();
         this.opcodeTable = generateOpcodeTable();
@@ -77,7 +79,7 @@ export class Cpu {
 
         // execute operation and get number of cycles (T-states)
         const cycles = operation(this);
-        this.incrementDivider(cycles);
+        this.timer.update(cycles);
 
         // check if we need to enable interrupts
         if (this.enableImeAfter > 0) {
@@ -163,7 +165,7 @@ export class Cpu {
             }
         }
 
-        this.incrementDivider(4);
+        this.timer.update(4);
     }
 
     private serviceInterrupt(interrupt: Interrupt) {
@@ -191,11 +193,6 @@ export class Cpu {
         const low = this.memoryBus.read(this.registers.sp++);
         const high = this.memoryBus.read(this.registers.sp++);
         return new Word16((high << 8) | low);
-    }
-
-    private incrementDivider(cycles: number) {
-        this.dividerCounter = (this.dividerCounter + cycles) & 0xffff;
-        this.memoryBus.write(DIV_ADDRESS, this.dividerCounter >> 8);
     }
 }
 

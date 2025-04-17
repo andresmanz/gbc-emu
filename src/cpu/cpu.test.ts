@@ -17,11 +17,15 @@ import {
     IE_REGISTER_ADDRESS,
     IF_REGISTER_ADDRESS,
 } from '../memory/gbMemoryBus';
+import { Timer } from '../timer';
 
 class MockMemoryBus implements MemoryBus {
     private memory: Uint8Array;
 
-    constructor(size: number) {
+    constructor(
+        size: number,
+        private timer: Timer,
+    ) {
         this.memory = new Uint8Array(size);
     }
 
@@ -32,6 +36,10 @@ class MockMemoryBus implements MemoryBus {
     }
 
     read(address: number): number {
+        if (address === DIV_ADDRESS) {
+            return this.timer.div;
+        }
+
         return this.memory[address];
     }
 
@@ -132,12 +140,14 @@ const conditions = [
 
 describe('initially', () => {
     it('sets PC to 0x0100', () => {
-        const cpu = new Cpu(new MockMemoryBus(16));
+        const timer = new Timer();
+        const cpu = new Cpu(new MockMemoryBus(16, timer), timer);
         expect(cpu.registers.pc).toBe(0x0100);
     });
 
     it('sets SP to 0xfffe', () => {
-        const cpu = new Cpu(new MockMemoryBus(16));
+        const timer = new Timer();
+        const cpu = new Cpu(new MockMemoryBus(16, timer), timer);
         expect(cpu.registers.sp).toBe(0xfffe);
     });
 });
@@ -148,18 +158,20 @@ describe('initially', () => {
  * the CPU starts executing instructions from this address.
  */
 function setupWithRom(romData: Uint8Array) {
-    const memoryBus = new MockMemoryBus(0x10000);
+    const timer = new Timer();
+    const memoryBus = new MockMemoryBus(0x10000, timer);
     memoryBus.setRomData(romData);
 
-    const cpu = new Cpu(memoryBus);
+    const cpu = new Cpu(memoryBus, timer);
     return cpu;
 }
 
 function setupWithRomData(data: number[]) {
-    const memoryBus = new MockMemoryBus(0x10000);
+    const timer = new Timer();
+    const memoryBus = new MockMemoryBus(0x10000, timer);
     memoryBus.setRomData(new Uint8Array(data));
 
-    const cpu = new Cpu(memoryBus);
+    const cpu = new Cpu(memoryBus, timer);
     return { cpu, memoryBus };
 }
 
@@ -3930,7 +3942,7 @@ describe('when multiple interrupts are triggered', () => {
     });
 });
 
-it('increments the divider register after 256 cycles', () => {
+it('increments DIV after 256 cycles', () => {
     // ADC_A_pHL takes 8 cycles, so execute 32 times
     const { cpu } = setupWithRomData(Array(32).fill(Opcode.ADC_A_pHL));
 
