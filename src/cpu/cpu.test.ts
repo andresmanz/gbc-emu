@@ -3683,3 +3683,44 @@ describe.for(r8Registers)('SRL %s', register => {
         expect(cpu.registers.carryFlag).toBe(0);
     });
 });
+
+describe('BIT u3, %s', () => {
+    function setupBitTest(r8: R8Register, bit: number, bitSet: boolean) {
+        const opcode = 0x40 + (bit << 3) + r8Registers.indexOf(r8);
+        const romData = new Uint8Array([0xcb, opcode]);
+        const cpu = setupWithRom(romData);
+
+        const value = bitSet ? 1 << bit : ~(1 << bit);
+        cpu.setR8Value(r8, value);
+
+        cpu.step();
+
+        return cpu;
+    }
+
+    for (let bit = 0; bit < 8; bit++) {
+        for (const r8 of r8Registers) {
+            describe(`BIT ${bit}, ${r8}`, () => {
+                it(`sets zero flag if bit ${bit} of ${r8} is 0`, () => {
+                    const cpu = setupBitTest(r8, bit, false);
+                    expect(cpu.registers.zeroFlag).toBe(1);
+                });
+
+                it(`clears zero flag if bit ${bit} of ${r8} is 1`, () => {
+                    const cpu = setupBitTest(r8, bit, true);
+                    expect(cpu.registers.zeroFlag).toBe(0);
+                });
+
+                it(`always clears subtract flag when testing bit ${bit} of ${r8}`, () => {
+                    const cpu = setupBitTest(r8, bit, true);
+                    expect(cpu.registers.subtractFlag).toBe(0);
+                });
+
+                it(`always sets half-carry flag when testing bit ${bit} of ${r8}`, () => {
+                    const cpu = setupBitTest(r8, bit, true);
+                    expect(cpu.registers.halfCarryFlag).toBe(1);
+                });
+            });
+        }
+    }
+});

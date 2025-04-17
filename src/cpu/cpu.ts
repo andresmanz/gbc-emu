@@ -853,8 +853,9 @@ function generateOpcodeTable() {
         operation(cpu);
     });
 
-    // TODO: handle STOP
     // TODO: handle HALT
+
+    // TODO: handle STOP
 
     return table;
 }
@@ -979,6 +980,22 @@ function generatePrefixedOpcodeTable() {
             cpu.registers.carryFlag = value & 1;
         });
     });
+
+    // handle BIT u3, r8
+    for (let bit = 0; bit < 8; ++bit) {
+        r8Registers.forEach((register, i) => {
+            const opcode = 0x40 + (bit << 3) + i;
+
+            table.set(opcode, cpu => {
+                const value = cpu.getR8Value(register);
+                const result = (value >> bit) & 1;
+
+                cpu.registers.zeroFlag = result ^ 1;
+                cpu.registers.subtractFlag = 0;
+                cpu.registers.halfCarryFlag = 1;
+            });
+        });
+    }
 
     return table;
 }
