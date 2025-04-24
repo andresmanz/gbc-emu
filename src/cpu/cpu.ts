@@ -1236,5 +1236,7 @@ function generatePrefixedOpcodeTable() {
         });
     }
 
+    // handle HALT
+
     return table;
 }

@@ -3917,3 +3917,5 @@ describe('when multiple interrupts are triggered', () => {
         }
     });
 });
+
+describe('HALT', () => {});
