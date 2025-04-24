@@ -68,10 +68,7 @@ export class Timer {
 
         if (this.tima > 0xff) {
             this.tima = this.tma;
-
-            if (this.onTimaOverflow) {
-                this.onTimaOverflow();
-            }
+            this.onTimaOverflow?.();
         }
     }
 
