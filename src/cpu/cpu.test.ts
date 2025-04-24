@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
     Cpu,
-    Interrupt,
-    interruptVectors,
     r16Registers,
     r16StackRegisters,
     R8Register,
     r8Registers,
 } from './cpu';
-import { MemoryBus } from '../memory/memoryBus';
-import { Rom } from '../memory/rom';
 import { Opcode, PrefixedOpcode, rstOpcodes } from './opcodes';
 import { Word16 } from './word16';
 import {
@@ -18,35 +14,13 @@ import {
     IF_REGISTER_ADDRESS,
 } from '../memory/gbMemoryBus';
 import { Timer } from '../timer';
-
-class MockMemoryBus implements MemoryBus {
-    private memory: Uint8Array;
-
-    constructor(
-        size: number,
-        private timer: Timer,
-    ) {
-        this.memory = new Uint8Array(size);
-    }
-
-    setRom(_rom: Rom): void {}
-
-    setRomData(data: Uint8Array): void {
-        this.memory.set(data, 0x0100);
-    }
-
-    read(address: number): number {
-        if (address === DIV_ADDRESS) {
-            return this.timer.div;
-        }
-
-        return this.memory[address];
-    }
-
-    write(address: number, value: number): void {
-        this.memory[address] = value;
-    }
-}
+import {
+    Interrupt,
+    InterruptController,
+    interrupts,
+    interruptVectors,
+} from '../interrupts';
+import { MockMemoryBus } from '../tests/mockMemoryBus';
 
 interface Flags {
     z?: number;
@@ -139,15 +113,22 @@ const conditions = [
 ];
 
 describe('initially', () => {
-    it('sets PC to 0x0100', () => {
+    function setupCpu() {
         const timer = new Timer();
-        const cpu = new Cpu(new MockMemoryBus(16, timer), timer);
+        const memoryBus = new MockMemoryBus(16, timer);
+        const interruptController = new InterruptController(memoryBus);
+        return new Cpu(memoryBus, timer, interruptController);
+    }
+
+    it('sets PC to 0x0100', () => {
+        const cpu = setupCpu();
+
         expect(cpu.registers.pc).toBe(0x0100);
     });
 
     it('sets SP to 0xfffe', () => {
-        const timer = new Timer();
-        const cpu = new Cpu(new MockMemoryBus(16, timer), timer);
+        const cpu = setupCpu();
+
         expect(cpu.registers.sp).toBe(0xfffe);
     });
 });
@@ -160,19 +141,21 @@ describe('initially', () => {
 function setupWithRom(romData: Uint8Array) {
     const timer = new Timer();
     const memoryBus = new MockMemoryBus(0x10000, timer);
+    const interruptController = new InterruptController(memoryBus);
     memoryBus.setRomData(romData);
+    const cpu = new Cpu(memoryBus, timer, interruptController);
 
-    const cpu = new Cpu(memoryBus, timer);
     return cpu;
 }
 
 function setupWithRomData(data: number[]) {
     const timer = new Timer();
     const memoryBus = new MockMemoryBus(0x10000, timer);
+    const interruptController = new InterruptController(memoryBus);
     memoryBus.setRomData(new Uint8Array(data));
+    const cpu = new Cpu(memoryBus, timer, interruptController);
 
-    const cpu = new Cpu(memoryBus, timer);
-    return { cpu, memoryBus };
+    return { cpu, memoryBus, interruptController };
 }
 
 it('handles nop opcode', () => {
@@ -3807,20 +3790,12 @@ describe('SET u3, %s', () => {
     }
 });
 
-const interrupts = [
-    Interrupt.VBlank,
-    Interrupt.LCDStat,
-    Interrupt.Timer,
-    Interrupt.Serial,
-    Interrupt.Joypad,
-];
-
 describe('triggerInterrupt', () => {
     describe.for(interrupts)('when triggering interrupt %s', interrupt => {
         it('sets only the correct IE bit to 1', () => {
-            const { cpu } = setupWithRomData([]);
+            const { cpu, interruptController } = setupWithRomData([]);
 
-            cpu.triggerInterrupt(interrupt);
+            interruptController.requestInterrupt(interrupt);
 
             expect(cpu.memoryBus.read(IE_REGISTER_ADDRESS)).toBe(
                 1 << interrupt,
@@ -3828,9 +3803,9 @@ describe('triggerInterrupt', () => {
         });
 
         it('sets only the correct IF bit to 1', () => {
-            const { cpu } = setupWithRomData([]);
+            const { cpu, interruptController } = setupWithRomData([]);
 
-            cpu.triggerInterrupt(interrupt);
+            interruptController.requestInterrupt(interrupt);
 
             expect(cpu.memoryBus.read(IF_REGISTER_ADDRESS)).toBe(
                 1 << interrupt,
@@ -3839,19 +3814,19 @@ describe('triggerInterrupt', () => {
     });
 
     it('leaves the other IE bits alone', () => {
-        const { cpu } = setupWithRomData([]);
+        const { cpu, interruptController } = setupWithRomData([]);
         cpu.memoryBus.write(IE_REGISTER_ADDRESS, 0b01010101);
 
-        cpu.triggerInterrupt(Interrupt.LCDStat);
+        interruptController.requestInterrupt(Interrupt.LCDStat);
 
         expect(cpu.memoryBus.read(IE_REGISTER_ADDRESS)).toBe(0b01010111);
     });
 
     it('leaves the other IF bits alone', () => {
-        const { cpu } = setupWithRomData([]);
+        const { cpu, interruptController } = setupWithRomData([]);
         cpu.memoryBus.write(IF_REGISTER_ADDRESS, 0b01010101);
 
-        cpu.triggerInterrupt(Interrupt.LCDStat);
+        interruptController.requestInterrupt(Interrupt.LCDStat);
 
         expect(cpu.memoryBus.read(IF_REGISTER_ADDRESS)).toBe(0b01010111);
     });
@@ -3859,8 +3834,8 @@ describe('triggerInterrupt', () => {
 
 describe('after triggering an interrupt', () => {
     function setupWithInterruptTriggered(interrupt: Interrupt) {
-        const { cpu } = setupWithRomData([Opcode.NOP]);
-        cpu.triggerInterrupt(interrupt);
+        const { cpu, interruptController } = setupWithRomData([Opcode.NOP]);
+        interruptController.requestInterrupt(interrupt);
         return cpu;
     }
 
@@ -3920,7 +3895,7 @@ describe('after triggering an interrupt', () => {
 
 describe('when multiple interrupts are triggered', () => {
     it('handles one after another with the correct priority', () => {
-        const { cpu } = setupWithRomData([Opcode.NOP]);
+        const { cpu, interruptController } = setupWithRomData([Opcode.NOP]);
         cpu.areInterruptsEnabled = true;
 
         // trigger interrupts and setup handlers that simply return
@@ -3928,7 +3903,7 @@ describe('when multiple interrupts are triggered', () => {
             const address = interruptVectors[interrupt];
             cpu.memoryBus.write(address, Opcode.NOP);
             cpu.memoryBus.write(address + 1, Opcode.RETI);
-            cpu.triggerInterrupt(interrupt);
+            interruptController.requestInterrupt(interrupt);
         }
 
         for (const interrupt of interrupts) {

@@ -1,8 +1,9 @@
 import {
-    IE_REGISTER_ADDRESS,
-    IF_REGISTER_ADDRESS,
-    memoryLayout,
-} from '../memory/gbMemoryBus';
+    Interrupt,
+    InterruptController,
+    interruptVectors,
+} from '../interrupts';
+import { memoryLayout } from '../memory/gbMemoryBus';
 import { MemoryBus } from '../memory/memoryBus';
 import { Timer } from '../timer';
 import { CpuRegisters } from './cpuRegisters';
@@ -22,30 +23,6 @@ export const r16Registers = ['bc', 'de', 'hl', 'sp'] as const;
 export const r16StackRegisters = ['bc', 'de', 'hl', 'af'] as const;
 export const conditions = ['NZ', 'Z', 'NC', 'C'] as const;
 
-export enum Interrupt {
-    VBlank = 0,
-    LCDStat = 1,
-    Timer = 2,
-    Serial = 3,
-    Joypad = 4,
-}
-
-const interrupts = [
-    Interrupt.VBlank,
-    Interrupt.LCDStat,
-    Interrupt.Timer,
-    Interrupt.Serial,
-    Interrupt.Joypad,
-];
-
-export const interruptVectors: Record<Interrupt, number> = {
-    [Interrupt.VBlank]: 0x40,
-    [Interrupt.LCDStat]: 0x48,
-    [Interrupt.Timer]: 0x50,
-    [Interrupt.Serial]: 0x58,
-    [Interrupt.Joypad]: 0x60,
-};
-
 export class Cpu {
     public memoryBus: MemoryBus;
     public registers = new CpuRegisters();
@@ -56,6 +33,7 @@ export class Cpu {
     constructor(
         memoryBus: MemoryBus,
         private timer: Timer,
+        private interruptController: InterruptController,
     ) {
         this.memoryBus = memoryBus;
         this.reset();
@@ -135,34 +113,15 @@ export class Cpu {
         this.enableImeAfter = 2;
     }
 
-    triggerInterrupt(interrupt: Interrupt) {
-        const ieValue = this.memoryBus.read(IE_REGISTER_ADDRESS);
-        const ifValue = this.memoryBus.read(IF_REGISTER_ADDRESS);
-
-        this.memoryBus.write(IE_REGISTER_ADDRESS, ieValue | (1 << interrupt));
-        this.memoryBus.write(IF_REGISTER_ADDRESS, ifValue | (1 << interrupt));
-    }
-
     private checkAndServiceInterrupts() {
         if (!this.ime) {
             return;
         }
 
-        const ieValue = this.memoryBus.read(IE_REGISTER_ADDRESS);
-        const ifValue = this.memoryBus.read(IF_REGISTER_ADDRESS);
-        const pending = ieValue & ifValue;
+        const pendingInterrupt = this.interruptController.getNextInterrupt();
 
-        if (pending === 0) {
-            // no interrupts pending
-            return;
-        }
-
-        // find the highest priority interrupt (lowest bit) and service it
-        for (const interrupt of interrupts) {
-            if ((pending & (1 << interrupt)) !== 0) {
-                this.serviceInterrupt(interrupt);
-                break;
-            }
+        if (pendingInterrupt !== null) {
+            this.serviceInterrupt(pendingInterrupt);
         }
 
         this.timer.update(4);
@@ -176,12 +135,7 @@ export class Cpu {
         this.pushWordToStack(new Word16(this.registers.pc));
         this.registers.pc = interruptVectors[interrupt];
 
-        this.clearInterruptFlag(interrupt);
-    }
-
-    private clearInterruptFlag(interrupt: Interrupt) {
-        const value = this.memoryBus.read(IF_REGISTER_ADDRESS);
-        this.memoryBus.write(IF_REGISTER_ADDRESS, value & ~(1 << interrupt));
+        this.interruptController.clearInterrupt(interrupt);
     }
 
     pushWordToStack(word: Word16) {
