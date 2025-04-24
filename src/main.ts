@@ -28,7 +28,8 @@ const stepButton = document.querySelector<HTMLButtonElement>('#stepButton');
 
 if (stepButton) {
     stepButton.addEventListener('click', () => {
-        emulator.step();
+        // run 70224 cycles for one full frame (Game Boy runs at ~59.7 FPS)
+        emulator.step(70224);
     });
 }
 

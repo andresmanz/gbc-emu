@@ -42,6 +42,14 @@ export class GbMemoryBus implements MemoryBus {
     private ieValue = 0;
     private ifValue = 0;
 
+    // placeholder memory
+    private joypadInput = 0;
+    private serial = new Ram(new Uint8Array(2));
+    private audio = new Ram(new Uint8Array(0x16));
+    private wavePattern = new Ram(new Uint8Array(0xf));
+    private lcdData = new Ram(new Uint8Array(0xb));
+    private disableBootRom = 0;
+
     constructor(private timer: Timer) {
         // initialize the memory bus with default mappings
         this.functionMap.map({
@@ -112,6 +120,47 @@ export class GbMemoryBus implements MemoryBus {
             end: memoryLayout.highRamEnd,
             read: this.highRam.read,
             write: this.highRam.write,
+        });
+
+        // placeholders
+        this.functionMap.mapSingleAddress({
+            address: 0xff00,
+            read: () => this.joypadInput,
+            write: value => (this.joypadInput = value),
+        });
+
+        this.functionMap.map({
+            start: 0xff01,
+            end: 0xff02,
+            read: this.serial.read,
+            write: this.serial.write,
+        });
+
+        this.functionMap.map({
+            start: 0xff10,
+            end: 0xff26,
+            read: this.audio.read,
+            write: this.audio.write,
+        });
+
+        this.functionMap.map({
+            start: 0xff30,
+            end: 0xff3f,
+            read: this.wavePattern.read,
+            write: this.wavePattern.write,
+        });
+
+        this.functionMap.map({
+            start: 0xff40,
+            end: 0xff4b,
+            read: this.lcdData.read,
+            write: this.lcdData.write,
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: 0xff50,
+            read: () => this.disableBootRom,
+            write: value => (this.disableBootRom = value),
         });
     }
 
