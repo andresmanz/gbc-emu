@@ -35,12 +35,15 @@ export const TAC_ADDRESS = 0xff07;
  */
 export class GbMemoryBus implements MemoryBus {
     private rom: Rom | null = null;
-    private videoRam: Ram = new Ram(new Uint8Array(0x2000)); // 8KB of VRAM
-    private workRam: Ram = new Ram(new Uint8Array(0x2000)); // 8KB of WRAM
+    private videoRam = new Ram(new Uint8Array(0x2000)); // 8KB of VRAM
+    private workRam = new Ram(new Uint8Array(0x2000)); // 8KB of WRAM
+    private highRam = new Ram(new Uint8Array(0x7e)); // 127 bytes of High RAM
     private functionMap: MemoryFunctionMap = new MemoryFunctionMap();
+    private ieValue = 0;
+    private ifValue = 0;
 
     constructor(private timer: Timer) {
-        // Initialize the memory bus with default mappings
+        // initialize the memory bus with default mappings
         this.functionMap.map({
             start: memoryLayout.romStart,
             end: memoryLayout.romEnd,
@@ -72,6 +75,43 @@ export class GbMemoryBus implements MemoryBus {
             end: DIV_ADDRESS,
             read: () => this.timer.div,
             write: this.timer.resetDiv,
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: TIMA_ADDRESS,
+            read: () => this.timer.tima,
+            write: value => (this.timer.tima = value),
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: TMA_ADDRESS,
+            read: () => this.timer.tma,
+            write: value => (this.timer.tma = value),
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: TAC_ADDRESS,
+            read: () => this.timer.tac,
+            write: value => (this.timer.tac = value),
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: IE_REGISTER_ADDRESS,
+            read: () => this.ieValue,
+            write: value => (this.ieValue = value),
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: IF_REGISTER_ADDRESS,
+            read: () => this.ifValue,
+            write: value => (this.ifValue = value),
+        });
+
+        this.functionMap.map({
+            start: memoryLayout.highRamStart,
+            end: memoryLayout.highRamEnd,
+            read: this.highRam.read,
+            write: this.highRam.write,
         });
     }
 

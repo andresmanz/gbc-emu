@@ -9,7 +9,6 @@ import {
 import { Opcode, PrefixedOpcode, rstOpcodes } from './opcodes';
 import { Word16 } from './word16';
 import {
-    DIV_ADDRESS,
     IE_REGISTER_ADDRESS,
     IF_REGISTER_ADDRESS,
 } from '../memory/gbMemoryBus';
@@ -117,7 +116,7 @@ describe('initially', () => {
         const timer = new Timer();
         const memoryBus = new MockMemoryBus(16, timer);
         const interruptController = new InterruptController(memoryBus);
-        return new Cpu(memoryBus, timer, interruptController);
+        return new Cpu(memoryBus, interruptController);
     }
 
     it('sets PC to 0x0100', () => {
@@ -143,7 +142,7 @@ function setupWithRom(romData: Uint8Array) {
     const memoryBus = new MockMemoryBus(0x10000, timer);
     const interruptController = new InterruptController(memoryBus);
     memoryBus.setRomData(romData);
-    const cpu = new Cpu(memoryBus, timer, interruptController);
+    const cpu = new Cpu(memoryBus, interruptController);
 
     return cpu;
 }
@@ -153,7 +152,7 @@ function setupWithRomData(data: number[]) {
     const memoryBus = new MockMemoryBus(0x10000, timer);
     const interruptController = new InterruptController(memoryBus);
     memoryBus.setRomData(new Uint8Array(data));
-    const cpu = new Cpu(memoryBus, timer, interruptController);
+    const cpu = new Cpu(memoryBus, interruptController);
 
     return { cpu, memoryBus, interruptController };
 }
@@ -3876,6 +3875,7 @@ describe('after triggering an interrupt', () => {
                 const cpu = setupWithInterruptTriggeredAndImeTrue(interrupt);
 
                 cpu.step();
+                cpu.step();
 
                 expect(cpu.registers.pc).toBe(interruptVectors[interrupt] + 1);
             });
@@ -3909,27 +3909,11 @@ describe('when multiple interrupts are triggered', () => {
         for (const interrupt of interrupts) {
             // step; should jump to the handler
             cpu.step();
-            expect(cpu.registers.pc).toBe(interruptVectors[interrupt] + 1);
+            expect(cpu.registers.pc).toBe(interruptVectors[interrupt]);
 
             // step to return and enable IME
             cpu.step();
+            cpu.step();
         }
     });
-});
-
-it('increments DIV after 256 cycles', () => {
-    // ADC_A_pHL takes 8 cycles, so execute 32 times
-    const { cpu } = setupWithRomData(Array(32).fill(Opcode.ADC_A_pHL));
-
-    for (let i = 0; i < 31; ++i) {
-        cpu.step();
-    }
-
-    // should still be 0
-    expect(cpu.memoryBus.read(DIV_ADDRESS)).toBe(0);
-
-    // now it should increment
-    cpu.step();
-
-    expect(cpu.memoryBus.read(DIV_ADDRESS)).toBe(1);
 });

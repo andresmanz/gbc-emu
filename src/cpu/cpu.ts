@@ -5,7 +5,6 @@ import {
 } from '../interrupts';
 import { memoryLayout } from '../memory/gbMemoryBus';
 import { MemoryBus } from '../memory/memoryBus';
-import { Timer } from '../timer';
 import { CpuRegisters } from './cpuRegisters';
 import {
     getCyclesFor,
@@ -32,7 +31,6 @@ export class Cpu {
 
     constructor(
         memoryBus: MemoryBus,
-        private timer: Timer,
         private interruptController: InterruptController,
     ) {
         this.memoryBus = memoryBus;
@@ -45,8 +43,17 @@ export class Cpu {
         this.registers.sp = 0xfffe;
     }
 
+    /**
+     * Services the next pending interrupt or executes the next instruction if there are
+     * no interrupts to serve. Returns the number of cycles it took.
+     */
     step() {
-        this.checkAndServiceInterrupts();
+        if (this.ime && this.interruptController.hasPendingInterrupts()) {
+            this.serviceInterrupts();
+
+            // servicing interrupt takes 20 T-cycles
+            return 20;
+        }
 
         const opcode = this.readNextByte();
         const operation = this.opcodeTable.get(opcode);
@@ -57,7 +64,6 @@ export class Cpu {
 
         // execute operation and get number of cycles (T-states)
         const cycles = operation(this);
-        this.timer.update(cycles);
 
         // check if we need to enable interrupts
         if (this.enableImeAfter > 0) {
@@ -67,6 +73,8 @@ export class Cpu {
                 this.ime = true;
             }
         }
+
+        return cycles;
     }
 
     readNextByte() {
@@ -113,18 +121,12 @@ export class Cpu {
         this.enableImeAfter = 2;
     }
 
-    private checkAndServiceInterrupts() {
-        if (!this.ime) {
-            return;
-        }
-
+    private serviceInterrupts() {
         const pendingInterrupt = this.interruptController.getNextInterrupt();
 
         if (pendingInterrupt !== null) {
             this.serviceInterrupt(pendingInterrupt);
         }
-
-        this.timer.update(4);
     }
 
     private serviceInterrupt(interrupt: Interrupt) {

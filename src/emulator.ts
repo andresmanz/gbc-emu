@@ -1,25 +1,24 @@
 import { Cpu } from './cpu/cpu';
-import { InterruptController } from './interrupts';
+import { Interrupt, InterruptController } from './interrupts';
 import { GbMemoryBus } from './memory/gbMemoryBus';
 import { MemoryBus } from './memory/memoryBus';
 import { Rom } from './memory/rom';
 import { Timer } from './timer';
 
 export class Emulator {
-    private timer: Timer;
-    private memoryBus: MemoryBus;
-    private interruptController: InterruptController;
-    private cpu: Cpu;
+    public readonly timer: Timer;
+    public readonly memoryBus: MemoryBus;
+    public readonly interruptController: InterruptController;
+    public readonly cpu: Cpu;
 
     constructor() {
         this.timer = new Timer();
         this.memoryBus = new GbMemoryBus(this.timer);
         this.interruptController = new InterruptController(this.memoryBus);
-        this.cpu = new Cpu(
-            this.memoryBus,
-            this.timer,
-            this.interruptController,
-        );
+        this.cpu = new Cpu(this.memoryBus, this.interruptController);
+
+        this.timer.onTimaOverflow = () =>
+            this.interruptController.requestInterrupt(Interrupt.Timer);
     }
 
     loadRom(data: Uint8Array): void {
@@ -27,7 +26,13 @@ export class Emulator {
         this.cpu.reset();
     }
 
-    step(): void {
-        this.cpu.step();
+    step(minCyclesToRun: number): void {
+        let cyclesExecuted = 0;
+
+        while (cyclesExecuted < minCyclesToRun) {
+            const cycles = this.cpu.step();
+            this.timer.update(cycles);
+            cyclesExecuted += cycles;
+        }
     }
 }

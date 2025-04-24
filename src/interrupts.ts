@@ -60,4 +60,10 @@ export class InterruptController {
 
         return null;
     }
+
+    hasPendingInterrupts() {
+        const ieValue = this.memoryBus.read(IE_REGISTER_ADDRESS);
+        const ifValue = this.memoryBus.read(IF_REGISTER_ADDRESS);
+        return (ieValue & ifValue) !== 0;
+    }
 }
