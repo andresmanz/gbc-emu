@@ -29,6 +29,7 @@ export const DIV_ADDRESS = 0xff04;
 export const TIMA_ADDRESS = 0xff05;
 export const TMA_ADDRESS = 0xff06;
 export const TAC_ADDRESS = 0xff07;
+export const LCD_CONTROLS_ADDRESS = 0xff40;
 
 /**
  * For now, this is a non-CGB memory bus implementation.
