@@ -1,7 +1,7 @@
-import { Rom } from './rom';
+import { Mbc } from './mbcs/mbc';
 
 export interface MemoryBus {
-    setRom(rom: Rom): void;
+    setRom(mbc: Mbc): void;
     read(address: number): number;
     write(address: number, value: number): void;
 }

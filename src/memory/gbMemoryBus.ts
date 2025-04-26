@@ -1,8 +1,9 @@
 import { MemoryFunctionMap } from './memoryFunctionMap';
-import { Rom } from './rom';
 import { Ram } from './ram';
 import { MemoryBus } from './memoryBus';
 import { Timer } from '../timer';
+import { Mbc } from './mbcs/mbc';
+import { Ppu } from '../ppu/ppu';
 
 export const memoryLayout = {
     romStart: 0x0000,
@@ -13,6 +14,8 @@ export const memoryLayout = {
     externalRamEnd: 0xbfff,
     workRamStart: 0xc000,
     workRamEnd: 0xdfff,
+    echoRamStart: 0xe000,
+    echoRamEnd: 0xfdff,
     oamStart: 0xfe00,
     oamEnd: 0xfe9f,
     ioRegistersStart: 0xff00,
@@ -29,47 +32,64 @@ export const DIV_ADDRESS = 0xff04;
 export const TIMA_ADDRESS = 0xff05;
 export const TMA_ADDRESS = 0xff06;
 export const TAC_ADDRESS = 0xff07;
-export const LCD_CONTROLS_ADDRESS = 0xff40;
+export const LCD_CONTROL_ADDRESS = 0xff40;
+export const STAT_ADDRESS = 0xff41;
+export const SCY_ADDRESS = 0xff42;
+export const SCX_ADDRESS = 0xff43;
+export const LY_ADDRESS = 0xff44;
+export const PALETTE_ADDRESS = 0xff47;
 
 /**
  * For now, this is a non-CGB memory bus implementation.
  */
 export class GbMemoryBus implements MemoryBus {
-    private rom: Rom | null = null;
-    private videoRam = new Ram(new Uint8Array(0x2000)); // 8KB of VRAM
+    private mbc: Mbc | null = null;
     private workRam = new Ram(new Uint8Array(0x2000)); // 8KB of WRAM
-    private highRam = new Ram(new Uint8Array(0x7e)); // 127 bytes of High RAM
+    private oam = new Ram(new Uint8Array(0xa0));
+    private highRam = new Ram(new Uint8Array(0x7f)); // 127 bytes of High RAM
     private functionMap: MemoryFunctionMap = new MemoryFunctionMap();
     private ieValue = 0;
     private ifValue = 0;
 
     // placeholder memory
     private joypadInput = 0;
-    private serial = new Ram(new Uint8Array(2));
-    private audio = new Ram(new Uint8Array(0x16));
-    private wavePattern = new Ram(new Uint8Array(0xf));
-    private lcdData = new Ram(new Uint8Array(0xb));
-    private disableBootRom = 0;
+    private ioFallback = new Ram(new Uint8Array(0xff));
+    private unusedRam = new Ram(new Uint8Array(0x60));
 
-    constructor(private timer: Timer) {
+    constructor(
+        private timer: Timer,
+        private ppu: Ppu,
+        private videoRam: Ram,
+    ) {
         // initialize the memory bus with default mappings
         this.functionMap.map({
             start: memoryLayout.romStart,
             end: memoryLayout.romEnd,
             read: (address: number) => {
-                if (!this.rom) {
+                if (!this.mbc) {
                     throw new Error(`ROM not initialized`);
                 }
 
-                return this.rom.read(address);
+                return this.mbc.readByte(address);
+            },
+            write: (address: number, value: number) => {
+                if (!this.mbc) {
+                    throw new Error(`ROM not initialized`);
+                }
+
+                this.mbc.writeByte(address, value);
             },
         });
 
         this.functionMap.map({
             start: memoryLayout.videoRamStart,
             end: memoryLayout.videoRamEnd,
-            read: this.videoRam.read,
-            write: this.videoRam.write,
+            read: address => {
+                return this.videoRam.read(address);
+            },
+            write: (address, value) => {
+                this.videoRam.write(address, value);
+            },
         });
 
         this.functionMap.map({
@@ -80,10 +100,49 @@ export class GbMemoryBus implements MemoryBus {
         });
 
         this.functionMap.map({
-            start: DIV_ADDRESS,
-            end: DIV_ADDRESS,
+            start: memoryLayout.echoRamStart,
+            end: memoryLayout.echoRamEnd,
+            read: this.workRam.read,
+            write: this.workRam.write,
+        });
+
+        this.functionMap.map({
+            start: memoryLayout.externalRamStart,
+            end: memoryLayout.externalRamEnd,
+            read: (address: number) => {
+                if (!this.mbc) {
+                    throw new Error(`ROM not initialized`);
+                }
+
+                return this.mbc.readByte(
+                    // TODO improve address handling
+                    memoryLayout.externalRamStart + address,
+                );
+            },
+            write: (address: number, value: number) => {
+                if (!this.mbc) {
+                    throw new Error(`ROM not initialized`);
+                }
+
+                this.mbc.writeByte(
+                    // TODO improve address handling
+                    memoryLayout.externalRamStart + address,
+                    value,
+                );
+            },
+        });
+
+        this.functionMap.map({
+            start: memoryLayout.oamStart,
+            end: memoryLayout.oamEnd,
+            read: this.oam.read,
+            write: this.oam.write,
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: DIV_ADDRESS,
             read: () => this.timer.div,
-            write: this.timer.resetDiv,
+            write: () => this.timer.resetDiv(),
         });
 
         this.functionMap.mapSingleAddress({
@@ -130,43 +189,49 @@ export class GbMemoryBus implements MemoryBus {
             write: value => (this.joypadInput = value),
         });
 
-        this.functionMap.map({
-            start: 0xff01,
-            end: 0xff02,
-            read: this.serial.read,
-            write: this.serial.write,
-        });
-
-        this.functionMap.map({
-            start: 0xff10,
-            end: 0xff26,
-            read: this.audio.read,
-            write: this.audio.write,
-        });
-
-        this.functionMap.map({
-            start: 0xff30,
-            end: 0xff3f,
-            read: this.wavePattern.read,
-            write: this.wavePattern.write,
-        });
-
-        this.functionMap.map({
-            start: 0xff40,
-            end: 0xff4b,
-            read: this.lcdData.read,
-            write: this.lcdData.write,
+        this.functionMap.mapSingleAddress({
+            address: LCD_CONTROL_ADDRESS,
+            read: () => this.ppu.lcdc,
+            write: value => (this.ppu.lcdc = value),
         });
 
         this.functionMap.mapSingleAddress({
-            address: 0xff50,
-            read: () => this.disableBootRom,
-            write: value => (this.disableBootRom = value),
+            address: STAT_ADDRESS,
+            read: () => this.ppu.stat,
+            write: value => (this.ppu.stat = value),
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: LY_ADDRESS,
+            read: () => this.ppu.ly,
+            write: () => {},
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: PALETTE_ADDRESS,
+            read: () => this.ppu.palette,
+            write: value => {
+                this.ppu.palette = value;
+            },
+        });
+
+        this.functionMap.map({
+            start: memoryLayout.ioRegistersStart,
+            end: memoryLayout.ioRegistersEnd,
+            read: this.ioFallback.read,
+            write: this.ioFallback.write,
+        });
+
+        this.functionMap.map({
+            start: 0xfea0,
+            end: 0xfeff,
+            read: this.unusedRam.read,
+            write: this.unusedRam.write,
         });
     }
 
-    setRom(rom: Rom): void {
-        this.rom = rom;
+    setRom(mbc: Mbc): void {
+        this.mbc = mbc;
     }
 
     read(address: number): number {
@@ -177,6 +242,10 @@ export class GbMemoryBus implements MemoryBus {
 
     write(address: number, value: number): void {
         const mapping = this.functionMap.findMapping(address);
+
+        if (address === 0xff40) {
+            console.log(`LCDC write: ${value.toString(2).padStart(8, '0')}`);
+        }
 
         if (mapping.write) {
             // write with local address

@@ -1,28 +1,6 @@
 import { it, describe, expect, vi } from 'vitest';
 import { MemoryFunctionMap } from './memoryFunctionMap';
 
-it('throws an error if mappings overlap', () => {
-    const memoryMap = new MemoryFunctionMap();
-
-    const mapping1 = {
-        start: 0,
-        end: 10,
-        read: (address: number) => address,
-    };
-
-    const mapping2 = {
-        start: 5,
-        end: 15,
-        read: (address: number) => address,
-    };
-
-    memoryMap.map(mapping1);
-
-    expect(() => memoryMap.map(mapping2)).toThrow(
-        'Overlapping memory mapping detected',
-    );
-});
-
 describe('when three valid mappings are provided', () => {
     function setupThreeValidMappings() {
         const memoryMap = new MemoryFunctionMap();
@@ -70,10 +48,6 @@ describe('when three valid mappings are provided', () => {
     it('throws an error for an invalid address', () => {
         const { memoryMap } = setupThreeValidMappings();
 
-        const invalidAddress = 35;
-
-        expect(() => memoryMap.findMapping(invalidAddress)).toThrow(
-            `Invalid address ${invalidAddress}`,
-        );
+        expect(() => memoryMap.findMapping(35)).toThrow(/invalid address/i);
     });
 });

@@ -21,17 +21,6 @@ export class MemoryFunctionMap {
             );
         }
 
-        for (const existingMapping of this.mappings) {
-            if (
-                (mapping.start >= existingMapping.start &&
-                    mapping.start < existingMapping.end) ||
-                (mapping.end > existingMapping.start &&
-                    mapping.end <= existingMapping.end)
-            ) {
-                throw new Error('Overlapping memory mapping detected');
-            }
-        }
-
         this.mappings.push(mapping);
     }
 
@@ -51,6 +40,6 @@ export class MemoryFunctionMap {
             }
         }
 
-        throw new Error(`Invalid address ${address}`);
+        throw new Error(`Invalid address 0x${address.toString(16)}`);
     }
 }

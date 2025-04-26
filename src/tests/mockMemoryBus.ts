@@ -1,6 +1,6 @@
 import { DIV_ADDRESS } from '../memory/gbMemoryBus';
+import { Mbc } from '../memory/mbcs/mbc';
 import { MemoryBus } from '../memory/memoryBus';
-import { Rom } from '../memory/rom';
 import { Timer } from '../timer';
 
 export class MockMemoryBus implements MemoryBus {
@@ -13,7 +13,7 @@ export class MockMemoryBus implements MemoryBus {
         this.memory = new Uint8Array(size);
     }
 
-    setRom(_rom: Rom): void {}
+    setRom(_rom: Mbc): void {}
 
     setRomData(data: Uint8Array): void {
         this.memory.set(data, 0x0100);

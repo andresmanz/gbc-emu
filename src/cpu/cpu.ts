@@ -16,16 +16,128 @@ import {
 import { Word16 } from './word16';
 
 export const r8Registers = ['b', 'c', 'd', 'e', 'h', 'l', '[hl]', 'a'] as const;
-export type R8Register = (typeof r8Registers)[number];
-
 export const r16Registers = ['bc', 'de', 'hl', 'sp'] as const;
 export const r16StackRegisters = ['bc', 'de', 'hl', 'af'] as const;
 export const conditions = ['NZ', 'Z', 'NC', 'C'] as const;
 
+export type Register8 = (typeof r8Registers)[number];
+type Register16 = (typeof r16Registers)[number];
+type R16StackRegister = (typeof r16StackRegisters)[number];
+type Condition = (typeof conditions)[number];
+type ImmediateOperand = 'imm8' | 'rel8' | 'imm16';
+
+/*
+type Operand =
+    | R8Register
+    | R16Register
+    | R16StackRegister
+    | Condition
+    | ImmediateOperand;
+    */
+
+type OperandRegister8 = `reg${Register8}`; // a, b, ...
+type OperandRegister16 = `reg${Register16}`; // af, bc, ...
+
+type OperandImmediate8 = 'imm8';
+type OperandImmediate16 = 'imm16';
+//type OperandMemoryHL = 'memHL';
+type OperandCondition = 'condZ' | 'condNZ' | 'condC' | 'condNC'; // Condition codes for certain opcodes
+
+/*
+const operandTemplates = {
+    // 8-bit registers
+    regA: { type: 'r8', name: 'a' },
+    regB: { type: 'r8', name: 'b' },
+    regC: { type: 'r8', name: 'c' },
+    regD: { type: 'r8', name: 'd' },
+    regE: { type: 'r8', name: 'e' },
+    regH: { type: 'r8', name: 'h' },
+    regL: { type: 'r8', name: 'l' },
+    regMemHL: { type: 'r8', name: '[hl]' },
+
+    // 16-bit registers
+    regAf: { type: 'r16', name: 'af' },
+    regBc: { type: 'r16', name: 'bc' },
+    regDe: { type: 'r16', name: 'de' },
+    regHl: { type: 'r16', name: 'hl' },
+    regSp: { type: 'r16', name: 'sp' },
+    regPc: { type: 'r16', name: 'pc' },
+
+    // Immediate values
+    imm8: { type: 'imm8' },
+    imm16: { type: 'imm16' },
+
+    // Flags / conditions (if you want later)
+    condNz: { type: 'condition', flag: 'zeroFlag', invert: true },
+    condZ: { type: 'condition', flag: 'zeroFlag', invert: false },
+    condNc: { type: 'condition', flag: 'subtractFlag', invert: true },
+    condC: { type: 'condition', flag: 'subtractFlag', invert: false },
+} as const;
+
+type OperandKey = keyof typeof operandTemplates;
+
+type OperandTypeFromKey<K extends OperandKey> = K extends `reg${infer R}`
+    ? { name: Lowercase<R> }
+    : K extends 'imm8' | 'imm16'
+      ? { value: number }
+      : K extends `cond${string}`
+        ? { flag: string; invert: boolean }
+        : never;
+
+// THIS is the important corrected version!
+type OperandTypesFromKeys<K extends readonly OperandKey[]> = K extends []
+    ? []
+    : K extends [infer First, ...infer Rest]
+      ? First extends OperandKey
+          ? [
+                OperandTypeFromKey<First>,
+                ...OperandTypesFromKeys<Rest extends OperandKey[] ? Rest : []>,
+            ]
+          : []
+      : [];
+
+function defineInstruction<const OperandKeys extends readonly OperandKey[]>(
+    mnemonic: string,
+    operands: OperandKeys,
+    execute: (...operands: [...OperandTypesFromKeys<OperandKeys>]) => number,
+) {
+    return { mnemonic, operands, execute };
+}
+*/
+
+type Operand = Register8 | Register16 | 'imm8' | 'imm16' | 'rel8';
+
+type OperandType<T> = T extends Register8
+    ? Register8
+    : T extends Register16
+      ? Register16
+      : T extends 'imm16' | 'imm8' | 'rel8'
+        ? number
+        : never;
+
+type OperandParamsFromArray<T extends readonly Operand[]> = {
+    [K in keyof T]: OperandType<T[K]>;
+};
+
+function defineInstruction<const T extends readonly Operand[]>(
+    mnemonic: string,
+    operands: T,
+    execute: (cpu: Cpu, ...args: OperandParamsFromArray<T>) => number,
+) {
+    return { mnemonic, operands, execute };
+}
+
+interface Instruction {
+    mnemonic: string;
+    operands: Operand[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execute: (cpu: Cpu, ...args: any[]) => number;
+}
+
 export class Cpu {
     public memoryBus: MemoryBus;
     public registers = new CpuRegisters();
-    private opcodeTable = new Map<Opcode, (cpu: Cpu) => number>();
+    private opcodeTable = new Map<Opcode, Instruction>();
     private ime = false;
     private enableImeAfter = 0;
 
@@ -56,14 +168,15 @@ export class Cpu {
         }
 
         const opcode = this.readNextByte();
-        const operation = this.opcodeTable.get(opcode);
+        const handler = this.opcodeTable.get(opcode);
 
-        if (!operation) {
+        if (!handler) {
             throw new Error(`Unknown opcode: ${opcode.toString(16)}`);
         }
 
         // execute operation and get number of cycles (T-states)
-        const cycles = operation(this);
+        const operands = this.fetchOperands(handler.operands);
+        const cycles = handler.execute(this, ...operands);
 
         // check if we need to enable interrupts
         if (this.enableImeAfter > 0) {
@@ -75,6 +188,26 @@ export class Cpu {
         }
 
         return cycles;
+    }
+
+    private fetchOperands(operandTypes: Operand[]) {
+        const values = [];
+
+        for (const type of operandTypes) {
+            switch (type) {
+                case 'imm8':
+                case 'rel8':
+                    values.push(this.readNextByte());
+                    break;
+                case 'imm16':
+                    values.push(this.readNextWord());
+                    break;
+                default:
+                    values.push(type);
+            }
+        }
+
+        return values;
     }
 
     readNextByte() {
@@ -92,7 +225,7 @@ export class Cpu {
         return (highByte << 8) | lowByte;
     }
 
-    getR8Value(reg: R8Register): number {
+    getR8Value(reg: Register8): number {
         if (reg === '[hl]') {
             return this.memoryBus.read(this.registers.hl);
         }
@@ -100,7 +233,7 @@ export class Cpu {
         return this.registers[reg];
     }
 
-    setR8Value(reg: R8Register, value: number) {
+    setR8Value(reg: Register8, value: number) {
         if (reg === '[hl]') {
             this.memoryBus.write(this.registers.hl, value);
         } else {
@@ -153,122 +286,169 @@ export class Cpu {
 }
 
 function generateOpcodeTable() {
-    const table = new Map<Opcode, (cpu: Cpu) => number>();
+    const table = new Map<Opcode, Instruction>();
     const prefixedOpcodeTable = generatePrefixedOpcodeTable();
 
     // NOP
-    table.set(Opcode.NOP, () => getCyclesFor(Opcode.NOP));
+    table.set(Opcode.NOP, {
+        mnemonic: 'NOP',
+        operands: [],
+        execute: () => getCyclesFor(Opcode.NOP),
+    });
 
     // generate LD r16, imm16 handlers
     const r16Registers = ['bc', 'de', 'hl', 'sp'] as const;
 
     for (let i = 0; i < r16Registers.length; i++) {
         const opcode = Opcode.LD_BC_d16 + i * 0x10;
-        table.set(opcode, cpu => {
-            const value = cpu.readNextWord();
-            cpu.registers[r16Registers[i]] = value;
 
-            return getCyclesFor(opcode);
-        });
+        table.set(
+            opcode,
+            defineInstruction(
+                'LD',
+                [r16Registers[i], 'imm16'],
+                (cpu, dest, value) => {
+                    cpu.registers[dest] = value;
+                    return getCyclesFor(opcode);
+                },
+            ),
+        );
     }
 
+    // TODO r16 operands are used, but should maybe be [r16mem] or something
     // add LD [r16mem], a handlers
-    table.set(Opcode.LD_pBC_A, cpu => {
-        cpu.memoryBus.write(cpu.registers.bc, cpu.registers.a);
-        return getCyclesFor(Opcode.LD_pBC_A);
-    });
+    table.set(
+        Opcode.LD_pBC_A,
+        defineInstruction('LD', ['bc', 'a'], (cpu, dest, src) => {
+            cpu.memoryBus.write(cpu.registers[dest], cpu.getR8Value(src));
+            return getCyclesFor(Opcode.LD_pBC_A);
+        }),
+    );
 
-    table.set(Opcode.LD_pDE_A, cpu => {
-        cpu.memoryBus.write(cpu.registers.de, cpu.registers.a);
-        return getCyclesFor(Opcode.LD_pDE_A);
-    });
+    table.set(
+        Opcode.LD_pDE_A,
+        defineInstruction('LD', ['de', 'a'], (cpu, dest, src) => {
+            cpu.memoryBus.write(cpu.registers[dest], cpu.getR8Value(src));
+            return getCyclesFor(Opcode.LD_pDE_A);
+        }),
+    );
 
-    table.set(Opcode.LD_pHLI_A, cpu => {
-        cpu.memoryBus.write(cpu.registers.hl, cpu.registers.a);
-        cpu.registers.hl++;
-        return getCyclesFor(Opcode.LD_pHLI_A);
-    });
+    table.set(
+        Opcode.LD_pHLI_A,
+        defineInstruction('LD', ['hl', 'a'], (cpu, dest, src) => {
+            cpu.memoryBus.write(cpu.registers[dest], cpu.getR8Value(src));
+            cpu.registers.hl++;
+            return getCyclesFor(Opcode.LD_pHLI_A);
+        }),
+    );
 
-    table.set(Opcode.LD_pHLD_A, cpu => {
-        cpu.memoryBus.write(cpu.registers.hl, cpu.registers.a);
-        cpu.registers.hl--;
-        return getCyclesFor(Opcode.LD_pHLD_A);
-    });
+    table.set(
+        Opcode.LD_pHLD_A,
+        defineInstruction('LD', ['hl', 'a'], (cpu, dest, src) => {
+            cpu.memoryBus.write(cpu.registers[dest], cpu.getR8Value(src));
+            cpu.registers.hl--;
+            return getCyclesFor(Opcode.LD_pHLD_A);
+        }),
+    );
 
+    // TODO r16 operands are used, but should maybe be [r16mem] or something
     // generate LD A, [r16mem] handlers
-    table.set(Opcode.LD_A_pBC, cpu => {
-        cpu.registers.a = cpu.memoryBus.read(cpu.registers.bc);
-        return getCyclesFor(Opcode.LD_A_pBC);
-    });
+    table.set(
+        Opcode.LD_A_pBC,
+        defineInstruction('LD', ['a', 'bc'], (cpu, dest, src) => {
+            cpu.setR8Value(dest, cpu.memoryBus.read(cpu.registers[src]));
+            return getCyclesFor(Opcode.LD_A_pBC);
+        }),
+    );
 
-    table.set(Opcode.LD_A_pDE, cpu => {
-        cpu.registers.a = cpu.memoryBus.read(cpu.registers.de);
-        return getCyclesFor(Opcode.LD_A_pDE);
-    });
+    table.set(
+        Opcode.LD_A_pDE,
+        defineInstruction('LD', ['a', 'de'], (cpu, dest, src) => {
+            cpu.setR8Value(dest, cpu.memoryBus.read(cpu.registers[src]));
+            return getCyclesFor(Opcode.LD_A_pDE);
+        }),
+    );
 
-    table.set(Opcode.LD_A_pHLI, cpu => {
-        cpu.registers.a = cpu.memoryBus.read(cpu.registers.hl);
-        cpu.registers.hl++;
+    table.set(
+        Opcode.LD_A_pHLI,
+        defineInstruction('LD', ['a', 'hl'], (cpu, dest, src) => {
+            cpu.setR8Value(dest, cpu.memoryBus.read(cpu.registers[src]));
+            cpu.registers.hl++;
+            return getCyclesFor(Opcode.LD_A_pHLI);
+        }),
+    );
 
-        return getCyclesFor(Opcode.LD_A_pHLI);
-    });
+    table.set(
+        Opcode.LD_A_pHLD,
+        defineInstruction('LD', ['a', 'hl'], (cpu, dest, src) => {
+            cpu.setR8Value(dest, cpu.memoryBus.read(cpu.registers[src]));
+            cpu.registers.hl--;
+            return getCyclesFor(Opcode.LD_A_pHLD);
+        }),
+    );
 
-    table.set(Opcode.LD_A_pHLD, cpu => {
-        cpu.registers.a = cpu.memoryBus.read(cpu.registers.hl);
-        cpu.registers.hl--;
-
-        return getCyclesFor(Opcode.LD_A_pHLD);
-    });
-
+    // TODO use [imm16] instead of imm16
     // handle LD [imm16], sp
-    table.set(Opcode.LD_imm16_SP, cpu => {
-        const address = cpu.readNextWord();
-        const sp = cpu.registers.sp;
-        cpu.memoryBus.write(address, sp & 0xff);
-        cpu.memoryBus.write(address + 1, (sp >> 8) & 0xff);
+    table.set(
+        Opcode.LD_imm16_SP,
+        defineInstruction('LD', ['imm16', 'sp'], (cpu, destAddr, src) => {
+            const value = cpu.registers[src];
+            cpu.memoryBus.write(destAddr, value & 0xff);
+            cpu.memoryBus.write(destAddr + 1, (value >> 8) & 0xff);
 
-        return getCyclesFor(Opcode.LD_imm16_SP);
-    });
+            return getCyclesFor(Opcode.LD_imm16_SP);
+        }),
+    );
 
     // generate INC r16 handlers
     for (let i = 0; i < r16Registers.length; i++) {
         const opcode = Opcode.INC_BC + i * 0x10;
 
-        table.set(opcode, cpu => {
-            cpu.registers[r16Registers[i]]++;
+        table.set(
+            opcode,
+            defineInstruction('INC', [r16Registers[i]], (cpu, reg) => {
+                cpu.registers[reg]++;
 
-            return getCyclesFor(opcode);
-        });
+                return getCyclesFor(opcode);
+            }),
+        );
     }
 
     // generate DEC r16 handlers
     for (let i = 0; i < r16Registers.length; i++) {
         const opcode = Opcode.DEC_BC + i * 0x10;
 
-        table.set(opcode, cpu => {
-            cpu.registers[r16Registers[i]]--;
+        table.set(
+            opcode,
+            defineInstruction('DEC', [r16Registers[i]], (cpu, reg) => {
+                cpu.registers[reg]--;
 
-            return getCyclesFor(opcode);
-        });
+                return getCyclesFor(opcode);
+            }),
+        );
     }
 
     // generate ADD HL, r16 handlers
     for (let i = 0; i < r16Registers.length; i++) {
         const opcode = Opcode.ADD_HL_BC + i * 0x10;
 
-        table.set(opcode, cpu => {
-            const hl = cpu.registers.hl;
-            const value = cpu.registers[r16Registers[i]];
-            const sum = hl + value;
-            cpu.registers.hl = sum & 0xffff;
-            // update flags
-            cpu.registers.subtractFlag = 0;
-            cpu.registers.halfCarryFlag =
-                (hl & 0x0fff) + (value & 0x0fff) > 0x0fff ? 1 : 0;
-            cpu.registers.carryFlag = sum > 0xffff ? 1 : 0;
+        table.set(
+            opcode,
+            defineInstruction('ADD', ['hl', r16Registers[i]], (cpu, a, b) => {
+                const v1 = cpu.registers[a];
+                const v2 = cpu.registers[b];
+                const sum = v1 + v2;
 
-            return getCyclesFor(opcode);
-        });
+                cpu.registers[a] = sum & 0xffff;
+                // update flags
+                cpu.registers.subtractFlag = 0;
+                cpu.registers.halfCarryFlag =
+                    (v1 & 0x0fff) + (v2 & 0x0fff) > 0x0fff ? 1 : 0;
+                cpu.registers.carryFlag = sum > 0xffff ? 1 : 0;
+
+                return getCyclesFor(opcode);
+            }),
+        );
     }
 
     // generate INC r8 handlers

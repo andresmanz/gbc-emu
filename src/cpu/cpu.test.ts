@@ -3,8 +3,8 @@ import {
     Cpu,
     r16Registers,
     r16StackRegisters,
-    R8Register,
     r8Registers,
+    Register8,
 } from './cpu';
 import { Opcode, PrefixedOpcode, rstOpcodes } from './opcodes';
 import { Word16 } from './word16';
@@ -31,7 +31,7 @@ interface Flags {
 interface ArithmeticOpTestCase {
     opcode: number;
     aValue: number;
-    r8Register: R8Register;
+    r8Register: Register8;
     r8Value: number;
     initialFlags?: Flags;
     expectedValue: number;
@@ -1174,7 +1174,7 @@ describe('add a, r8', () => {
 });
 
 describe('adc a, r8', () => {
-    function setupAdcTest(r8: R8Register) {
+    function setupAdcTest(r8: Register8) {
         const opcode = Opcode.ADC_A_B + r8Registers.indexOf(r8);
         const romData = new Uint8Array([opcode]);
         const cpu = setupWithRom(romData);
@@ -1393,7 +1393,7 @@ describe('sub a, r8', () => {
 });
 
 describe('sbc a, r8', () => {
-    function setupSbcTest(r8: R8Register) {
+    function setupSbcTest(r8: Register8) {
         const opcode = Opcode.SBC_A_B + r8Registers.indexOf(r8);
         const romData = new Uint8Array([opcode]);
         const cpu = setupWithRom(romData);
@@ -3686,7 +3686,7 @@ describe.for(r8Registers)('SRL %s', register => {
 });
 
 describe('BIT u3, %s', () => {
-    function setupBitTest(r8: R8Register, bit: number, bitSet: boolean) {
+    function setupBitTest(r8: Register8, bit: number, bitSet: boolean) {
         const opcode =
             PrefixedOpcode.BIT0_B + (bit << 3) + r8Registers.indexOf(r8);
         const romData = new Uint8Array([0xcb, opcode]);
@@ -3733,7 +3733,7 @@ describe('RES u3, %s', () => {
         0b10111111, 0b01111111,
     ];
 
-    function setupBitTest(r8: R8Register, bit: number) {
+    function setupBitTest(r8: Register8, bit: number) {
         const opcode =
             PrefixedOpcode.RES0_B + (bit << 3) + r8Registers.indexOf(r8);
         const romData = new Uint8Array([0xcb, opcode]);
@@ -3764,7 +3764,7 @@ describe('SET u3, %s', () => {
         0b01000000, 0b10000000,
     ];
 
-    function setupBitTest(r8: R8Register, bit: number) {
+    function setupBitTest(r8: Register8, bit: number) {
         const opcode =
             PrefixedOpcode.SET0_B + (bit << 3) + r8Registers.indexOf(r8);
         const romData = new Uint8Array([0xcb, opcode]);
