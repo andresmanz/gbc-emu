@@ -195,7 +195,6 @@ export class Ppu {
             const colorBit1 = (byte2 >> bitIndex) & 1;
             const colorId = (colorBit1 << 1) | colorBit0;
 
-            //const palette = this.memoryBus.read(0xff47);
             const color = (this.palette >> (colorId * 2)) & 0x03;
 
             const index = (y * 160 + x) * 4;
@@ -204,16 +203,16 @@ export class Ppu {
             switch (color) {
                 case 0:
                     shade = 255;
-                    break; // White
+                    break;
                 case 1:
                     shade = 170;
-                    break; // Light gray
+                    break;
                 case 2:
                     shade = 85;
-                    break; // Dark gray
+                    break;
                 case 3:
                     shade = 0;
-                    break; // Black
+                    break;
             }
 
             this.framebuffer[index + 0] = shade; // Red

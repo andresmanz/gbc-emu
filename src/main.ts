@@ -5,11 +5,31 @@ import './style.css';
 
 const TILE_SIZE = 8;
 const TILES_X = 16; // 16 tiles per row in debug canvas
-const NUM_TILES = 256;
+const NUM_TILES = 384;
 const TILE_BYTES = 16;
 const vramBase = 0x8000;
 
 let isPaused = false;
+
+function download(filename: string, text: string) {
+    const element = document.createElement('a');
+    element.setAttribute(
+        'href',
+        'data:text/plain;charset=utf-8,' + encodeURIComponent(text),
+    );
+    element.setAttribute('download', filename);
+
+    element.style.display = 'none';
+    document.body.appendChild(element);
+
+    element.click();
+
+    document.body.removeChild(element);
+}
+
+function downloadLog() {
+    download('log.txt', emulator.logger.lines.join('\n'));
+}
 
 function decodeTiles(memoryBus: MemoryBus): number[][] {
     const tiles: number[][] = [];
@@ -62,20 +82,9 @@ function renderTiles(ctx: CanvasRenderingContext2D, tiles: number[][]) {
     });
 }
 
-// Helper: simple Game Boy grayscale palette
 function getColor(colorId: number): string {
-    switch (colorId) {
-        case 0:
-            return '#FFFFFF'; // White
-        case 1:
-            return '#AAAAAA'; // Light gray
-        case 2:
-            return '#555555'; // Dark gray
-        case 3:
-            return '#000000'; // Black
-        default:
-            return '#FF00FF'; // Magenta (error color)
-    }
+    const colors = ['#FFFFFF', '#AAAAAA', '#555555', '#000000'];
+    return colors[colorId];
 }
 
 const CYCLES_PER_FRAME = 70224; // 456 cycles/line * 154 lines
@@ -85,6 +94,13 @@ const romInput = document.querySelector<HTMLInputElement>('#romInput');
 const screenCanvas = document.querySelector<HTMLCanvasElement>('#screenCanvas');
 const tileCanvas = document.querySelector<HTMLCanvasElement>('#tileCanvas');
 const tileCtx = tileCanvas?.getContext('2d');
+const logContainer = document.querySelector<HTMLDivElement>('#logs');
+
+function updateLog() {
+    if (logContainer) {
+        logContainer.innerHTML = emulator.logger.lines.slice(-20).join('<br>');
+    }
+}
 
 function frame() {
     emulator.step(CYCLES_PER_FRAME);
@@ -97,6 +113,8 @@ function frame() {
     if (!isPaused) {
         requestAnimationFrame(frame);
     }
+
+    updateLog();
 }
 
 if (romInput && screenCanvas) {
@@ -132,7 +150,8 @@ if (romInput && screenCanvas) {
 
         if (stepButton) {
             stepButton.addEventListener('click', () => {
-                requestAnimationFrame(frame);
+                emulator.step(1);
+                updateLog();
             });
         }
 
@@ -162,5 +181,10 @@ if (romInput && screenCanvas) {
                 pauseButton.innerHTML = 'Resume';
             }
         });
+
+        const downloadLogButton =
+            document.querySelector<HTMLButtonElement>('#downloadLogButton');
+
+        downloadLogButton?.addEventListener('click', downloadLog);
     }
 }

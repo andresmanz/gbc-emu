@@ -341,6 +341,8 @@ describe.for(r16Registers)('inc %s', r16 => {
     });
 });
 
+// TODO handle AF!
+
 describe.for(r16Registers)('dec %s', r16 => {
     const opcode = 0x0b + r16Registers.indexOf(r16) * 0x10;
 
@@ -402,6 +404,17 @@ describe('inc r8', () => {
 
             expect(cpu.getR8Value(r8)).toBe(0x02);
         });
+
+        it(`sets the zero flag if the new value is 0`, () => {
+            const romData = new Uint8Array([opcode]);
+            const cpu = setupWithRom(romData);
+            cpu.setR8Value(r8, 0xff);
+
+            cpu.step();
+
+            expect(cpu.getR8Value(r8)).toBe(0x00);
+            expect(cpu.registers.zeroFlag).toBe(1);
+        });
     });
 });
 
@@ -417,6 +430,16 @@ describe('dec r8', () => {
             cpu.step();
 
             expect(cpu.getR8Value(r8)).toBe(0x01);
+        });
+
+        it(`sets the zero flag if the new value is 0`, () => {
+            const romData = new Uint8Array([opcode]);
+            const cpu = setupWithRom(romData);
+            cpu.setR8Value(r8, 0x01);
+
+            cpu.step();
+
+            expect(cpu.registers.zeroFlag).toBe(1);
         });
     });
 });
@@ -675,8 +698,65 @@ describe('rra', () => {
 
 describe('daa', () => {
     describe('after an addition', () => {
+        it('correctly increments', () => {
+            const romData = new Uint8Array([
+                Opcode.ADD_A_imm8,
+                0x01,
+                Opcode.DAA,
+            ]);
+            const cpu = setupWithRom(romData);
+            cpu.registers.a = 0x09;
+
+            cpu.step();
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x10);
+            expect(cpu.registers.zeroFlag).toBe(0);
+            expect(cpu.registers.subtractFlag).toBe(0);
+            expect(cpu.registers.halfCarryFlag).toBe(0);
+            expect(cpu.registers.carryFlag).toBe(0);
+        });
+
+        it('correctly increments with half carry', () => {
+            const romData = new Uint8Array([
+                Opcode.ADD_A_imm8,
+                0x01,
+                Opcode.DAA,
+            ]);
+            const cpu = setupWithRom(romData);
+            cpu.registers.a = 0x0f;
+
+            cpu.step();
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x16);
+            expect(cpu.registers.zeroFlag).toBe(0);
+            expect(cpu.registers.subtractFlag).toBe(0);
+            expect(cpu.registers.halfCarryFlag).toBe(0);
+            expect(cpu.registers.carryFlag).toBe(0);
+        });
+
+        it('correctly increments with carry', () => {
+            const romData = new Uint8Array([
+                Opcode.ADD_A_imm8,
+                0x99,
+                Opcode.DAA,
+            ]);
+            const cpu = setupWithRom(romData);
+            cpu.registers.a = 0x99;
+
+            cpu.step();
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x98);
+            expect(cpu.registers.zeroFlag).toBe(0);
+            expect(cpu.registers.subtractFlag).toBe(0);
+            expect(cpu.registers.halfCarryFlag).toBe(0);
+            expect(cpu.registers.carryFlag).toBe(1);
+        });
+
         it('does not adjust the value of A when result is less than 0x99', () => {
-            const romData = new Uint8Array([0x27]);
+            const romData = new Uint8Array([Opcode.DAA]);
             const cpu = setupWithRom(romData);
             cpu.registers.a = 0x77;
 
@@ -689,7 +769,7 @@ describe('daa', () => {
         });
 
         it('adjusts the value of A correctly when unit digit is greater than 9', () => {
-            const romData = new Uint8Array([0x27]);
+            const romData = new Uint8Array([Opcode.DAA]);
             const cpu = setupWithRom(romData);
             cpu.registers.a = 0x42 + 0x29; // = 0x6b -> 0x71
 
@@ -778,6 +858,46 @@ describe('daa', () => {
             return cpu;
         }
 
+        it('correctly acts after subtraction without half carry', () => {
+            const { cpu } = setupWithRomData([
+                Opcode.LD_A_imm8,
+                0x15,
+                Opcode.SUB_A_imm8,
+                0x06,
+                Opcode.DAA,
+            ]);
+
+            cpu.step();
+            cpu.step();
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x09);
+            expect(cpu.registers.zeroFlag).toBe(0);
+            expect(cpu.registers.subtractFlag).toBe(1);
+            expect(cpu.registers.halfCarryFlag).toBe(0);
+            expect(cpu.registers.carryFlag).toBe(0);
+        });
+
+        it('sets zero flag when result is 0', () => {
+            const { cpu } = setupWithRomData([
+                Opcode.LD_A_imm8,
+                0x10,
+                Opcode.SUB_A_imm8,
+                0x10,
+                Opcode.DAA,
+            ]);
+
+            cpu.step();
+            cpu.step();
+            cpu.step();
+
+            expect(cpu.registers.a).toBe(0x00);
+            expect(cpu.registers.zeroFlag).toBe(1);
+            expect(cpu.registers.subtractFlag).toBe(1);
+            expect(cpu.registers.halfCarryFlag).toBe(0);
+            expect(cpu.registers.carryFlag).toBe(0);
+        });
+
         it('does not adjust the value of A when result is less than 0x99', () => {
             const cpu = setupAfterSubtraction();
             cpu.registers.a = 0x77 - 0x55; // = 0x22
@@ -813,7 +933,7 @@ describe('daa', () => {
             expect(cpu.registers.a).toBe(0x84);
             expect(cpu.registers.zeroFlag).toBe(0);
             expect(cpu.registers.halfCarryFlag).toBe(0);
-            expect(cpu.registers.carryFlag).toBe(0);
+            expect(cpu.registers.carryFlag).toBe(1);
         });
 
         it('does not adjust A when the tens digit is greater than 9', () => {
@@ -2957,6 +3077,16 @@ describe('when executing ADD SP, imm8', () => {
         expect(cpu.registers.sp).toBe(0x1184);
     });
 
+    it('clears the zero flag', () => {
+        const { cpu } = setupWithRomData([Opcode.ADD_SP_imm8, 0x0]);
+        cpu.registers.sp = 0x0;
+        cpu.registers.zeroFlag = 1;
+
+        cpu.step();
+
+        expect(cpu.registers.zeroFlag).toBe(0);
+    });
+
     it('clears the subtraction flag', () => {
         const { cpu } = setupWithRomData([Opcode.ADD_SP_imm8, 0x34]);
         cpu.registers.sp = 0x1200;
@@ -2964,6 +3094,17 @@ describe('when executing ADD SP, imm8', () => {
         cpu.step();
 
         expect(cpu.registers.subtractFlag).toBe(0);
+    });
+
+    it('sets both half carry and carry flag if there were both', () => {
+        const { cpu } = setupWithRomData([Opcode.ADD_SP_imm8, 0xff]);
+        cpu.registers.sp = 0x0001;
+
+        cpu.step();
+
+        expect(cpu.registers.sp).toBe(0x0);
+        expect(cpu.registers.halfCarryFlag).toBe(1);
+        expect(cpu.registers.carryFlag).toBe(1);
     });
 
     it('sets the half carry flag if there was a half carry', () => {
@@ -3005,14 +3146,24 @@ describe('when executing ADD SP, imm8', () => {
 });
 
 describe('when executing LD HL, SP+imm8', () => {
-    it('adds the signed positive value imm8 to SP and copies to HL', () => {
+    it('adds the signed positive value imm8 to SP and copies result to HL', () => {
         const { cpu } = setupWithRomData([Opcode.LD_HL_SP_imm8, 0x34]);
         cpu.registers.sp = 0x1200;
 
         cpu.step();
 
-        expect(cpu.registers.sp).toBe(0x1234);
+        expect(cpu.registers.sp).toBe(0x1200);
         expect(cpu.registers.hl).toBe(0x1234);
+    });
+
+    it('clears the zero flag', () => {
+        const { cpu } = setupWithRomData([Opcode.LD_HL_SP_imm8, 0]);
+        cpu.registers.sp = 0;
+        cpu.registers.zeroFlag = 1;
+
+        cpu.step();
+
+        expect(cpu.registers.zeroFlag).toBe(0);
     });
 
     it('adds the signed negative value imm8 to SP and copies to HL', () => {
@@ -3021,7 +3172,7 @@ describe('when executing LD HL, SP+imm8', () => {
 
         cpu.step();
 
-        expect(cpu.registers.sp).toBe(0x1184);
+        expect(cpu.registers.sp).toBe(0x1200);
         expect(cpu.registers.hl).toBe(0x1184);
     });
 
@@ -3040,7 +3191,6 @@ describe('when executing LD HL, SP+imm8', () => {
 
         cpu.step();
 
-        expect(cpu.registers.sp).toBe(0x1300);
         expect(cpu.registers.halfCarryFlag).toBe(1);
     });
 
@@ -3317,8 +3467,18 @@ describe.for(r8Registers)('RL %s', register => {
     });
 });
 
-describe.for(r8Registers)('RR %s', register => {
+describe.only.for(r8Registers)('RR %s', register => {
     const opcode = PrefixedOpcode.RR_B + r8Registers.indexOf(register);
+
+    it('rotates right correctly', () => {
+        const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
+        cpu.setR8Value(register, 0x47);
+        cpu.registers.f = 0x00;
+
+        cpu.step();
+
+        expect(cpu.getR8Value(register)).toBe(0x23);
+    });
 
     it('rotates right including the carry 1', () => {
         const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);

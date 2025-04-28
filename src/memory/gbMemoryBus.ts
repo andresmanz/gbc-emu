@@ -26,6 +26,8 @@ export const memoryLayout = {
     interruptEnableEnd: 0xffff,
 } as const;
 
+export const SB_ADDRESS = 0xff01;
+export const SC_ADDRESS = 0xff02;
 export const IF_REGISTER_ADDRESS = 0xff0f;
 export const IE_REGISTER_ADDRESS = 0xffff;
 export const DIV_ADDRESS = 0xff04;
@@ -50,6 +52,7 @@ export class GbMemoryBus implements MemoryBus {
     private functionMap: MemoryFunctionMap = new MemoryFunctionMap();
     private ieValue = 0;
     private ifValue = 0;
+    public serialLog = '';
 
     // placeholder memory
     private joypadInput = 0;
@@ -136,7 +139,9 @@ export class GbMemoryBus implements MemoryBus {
             start: memoryLayout.oamStart,
             end: memoryLayout.oamEnd,
             read: this.oam.read,
-            write: this.oam.write,
+            write: (address, value) => {
+                this.oam.write(address, value);
+            },
         });
 
         this.functionMap.mapSingleAddress({
@@ -215,6 +220,22 @@ export class GbMemoryBus implements MemoryBus {
             },
         });
 
+        this.functionMap.mapSingleAddress({
+            address: SB_ADDRESS,
+            read: () => 0,
+            write: value => {
+                this.serialLog += String.fromCharCode(value);
+            },
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: SC_ADDRESS,
+            read: () => 0,
+            write: () => {
+                console.log('serial log: ' + this.serialLog);
+            },
+        });
+
         this.functionMap.map({
             start: memoryLayout.ioRegistersStart,
             end: memoryLayout.ioRegistersEnd,
@@ -242,10 +263,6 @@ export class GbMemoryBus implements MemoryBus {
 
     write(address: number, value: number): void {
         const mapping = this.functionMap.findMapping(address);
-
-        if (address === 0xff40) {
-            console.log(`LCDC write: ${value.toString(2).padStart(8, '0')}`);
-        }
 
         if (mapping.write) {
             // write with local address

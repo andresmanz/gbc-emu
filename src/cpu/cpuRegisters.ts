@@ -36,7 +36,7 @@ export class CpuRegisters {
     }
 
     set f(value: number) {
-        this._f = value & 0xff;
+        this._f = value & 0xf0;
     }
 
     get b() {
@@ -143,7 +143,7 @@ export class CpuRegisters {
         return (this.f >> bit) & 1;
     }
 
-    private setFlagBit(bit: number, value: number): void {
+    private setFlagBit(bit: number, value: number) {
         if (value) {
             this.f |= 1 << bit;
         } else {

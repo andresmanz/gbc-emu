@@ -3,6 +3,7 @@ import {
     InterruptController,
     interruptVectors,
 } from '../interrupts';
+import { Logger } from '../logger';
 import { memoryLayout } from '../memory/gbMemoryBus';
 import { MemoryBus } from '../memory/memoryBus';
 import { CpuRegisters } from './cpuRegisters';
@@ -74,6 +75,7 @@ export class Cpu {
     constructor(
         memoryBus: MemoryBus,
         private interruptController: InterruptController,
+        private logger?: Logger,
     ) {
         this.memoryBus = memoryBus;
         this.reset();
@@ -81,6 +83,15 @@ export class Cpu {
     }
 
     reset() {
+        this.registers.a = 0x01;
+        // TODO set H and C from ROM checksum (https://gbdev.io/pandocs/Power_Up_Sequence.html)
+        this.registers.f = 0xb0;
+        this.registers.b = 0x00;
+        this.registers.c = 0x13;
+        this.registers.d = 0x00;
+        this.registers.e = 0xd8;
+        this.registers.h = 0x01;
+        this.registers.l = 0x4d;
         this.registers.pc = 0x0100;
         this.registers.sp = 0xfffe;
     }
@@ -97,6 +108,30 @@ export class Cpu {
             return 20;
         }
 
+        //A:00 F:11 B:22 C:33 D:44 E:55 H:66 L:77 SP:8888 PC:9999 PCMEM:AA,BB,CC,DD
+        const toHexStr = (value: number, length = 2) =>
+            value.toString(16).toUpperCase().padStart(length, '0');
+
+        const a = toHexStr(this.registers.a);
+        const f = toHexStr(this.registers.f);
+        const b = toHexStr(this.registers.b);
+        const c = toHexStr(this.registers.c);
+        const d = toHexStr(this.registers.d);
+        const e = toHexStr(this.registers.e);
+        const h = toHexStr(this.registers.h);
+        const l = toHexStr(this.registers.l);
+        const sp = toHexStr(this.registers.sp, 4);
+        const pc = toHexStr(this.registers.pc, 4);
+        const pcMem0 = toHexStr(this.memoryBus.read(this.registers.pc));
+        const pcMem1 = toHexStr(this.memoryBus.read(this.registers.pc + 1));
+        const pcMem2 = toHexStr(this.memoryBus.read(this.registers.pc + 2));
+        const pcMem3 = toHexStr(this.memoryBus.read(this.registers.pc + 3));
+        const pcMem = `${pcMem0},${pcMem1},${pcMem2},${pcMem3}`;
+
+        this.logger?.log(
+            `A:${a} F:${f} B:${b} C:${c} D:${d} E:${e} H:${h} L:${l} SP:${sp} PC:${pc} PCMEM:${pcMem}`,
+        );
+
         const opcode = this.readNextByte();
         const instruction = this.opcodeTable.get(opcode);
 
@@ -107,6 +142,30 @@ export class Cpu {
         // execute operation and get number of cycles (T-states)
         const operands = this.fetchOperands(instruction.operands);
 
+        // TODO
+        if (instruction.mnemonic === 'DAA') {
+            //this.log = true;
+        }
+
+        //this.logInstruction(instruction, operands);
+        const cycles = instruction.execute(this, ...operands);
+
+        // check if we need to enable interrupts
+        if (this.enableImeAfter > 0) {
+            this.enableImeAfter--;
+
+            if (this.enableImeAfter === 0) {
+                this.ime = true;
+            }
+        }
+
+        return cycles;
+    }
+
+    private logInstruction(
+        instruction: Instruction,
+        operands: (Operand | number)[],
+    ) {
         const operandsDebugString = operands
             .map(value => {
                 if (typeof value === 'number') {
@@ -125,24 +184,9 @@ export class Cpu {
             })
             .join(', ');
 
-        /*
-        console.log(
+        this.logger?.log(
             `execute: ${instruction.mnemonic} ${instruction.operands.map(operand => operand.toUpperCase()).join(', ')} - (${operandsDebugString})`,
         );
-        */
-
-        const cycles = instruction.execute(this, ...operands);
-
-        // check if we need to enable interrupts
-        if (this.enableImeAfter > 0) {
-            this.enableImeAfter--;
-
-            if (this.enableImeAfter === 0) {
-                this.ime = true;
-            }
-        }
-
-        return cycles;
     }
 
     private fetchOperands(operandTypes: Operand[]) {
@@ -414,7 +458,7 @@ function generateOpcodeTable() {
             opcode,
             defineInstruction('INC', [r8Registers[i]], (cpu, reg) => {
                 const value = cpu.getR8Value(r8Registers[i]);
-                const incrementedValue = value + 1;
+                const incrementedValue = (value + 1) & 0xff;
                 cpu.setR8Value(reg, incrementedValue);
 
                 // update flags
@@ -435,7 +479,7 @@ function generateOpcodeTable() {
             opcode,
             defineInstruction('DEC', [r8Registers[i]], (cpu, reg) => {
                 const value = cpu.getR8Value(reg);
-                const decrementedValue = value - 1;
+                const decrementedValue = (value - 1) & 0xff;
                 cpu.setR8Value(r8Registers[i], decrementedValue);
 
                 // update flags
@@ -450,7 +494,7 @@ function generateOpcodeTable() {
 
     // generate LD r8, imm8 handlers
     for (let i = 0; i < r8Registers.length; i++) {
-        const opcode = Opcode.LD_B_d8 + (i << 3);
+        const opcode = Opcode.LD_B_imm8 + (i << 3);
 
         table.set(
             opcode,
@@ -539,7 +583,6 @@ function generateOpcodeTable() {
         Opcode.DAA,
         defineInstruction('DAA', [], cpu => {
             let a = cpu.registers.a;
-            let carry = 0;
 
             if (cpu.registers.subtractFlag) {
                 let adjustment = 0;
@@ -556,13 +599,13 @@ function generateOpcodeTable() {
             } else {
                 let adjustment = 0;
 
-                if (cpu.registers.halfCarryFlag || (a & 0xf) > 0x09) {
+                if (cpu.registers.halfCarryFlag || (a & 0xf) > 0x9) {
                     adjustment = 0x06;
                 }
 
                 if (cpu.registers.carryFlag || a > 0x99) {
                     adjustment |= 0x60;
-                    carry = 1;
+                    cpu.registers.carryFlag = 1;
                 }
 
                 a += adjustment;
@@ -571,7 +614,6 @@ function generateOpcodeTable() {
             cpu.registers.a = a & 0xff;
             cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
             cpu.registers.halfCarryFlag = 0;
-            cpu.registers.carryFlag = carry;
 
             return getCyclesFor(Opcode.DAA);
         }),
@@ -686,7 +728,7 @@ function generateOpcodeTable() {
                     const newHalfCarryFlag =
                         (cpu.registers.a & 0xf) + (value & 0xf) > 0xf ? 1 : 0;
                     const sum = cpu.registers.a + value;
-                    cpu.registers.a = sum & 0xff;
+                    cpu.registers.a = sum;
 
                     // update flags
                     cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
@@ -869,7 +911,7 @@ function generateOpcodeTable() {
             const newHalfCarryFlag =
                 (cpu.registers.a & 0xf) + (value & 0xf) > 0xf ? 1 : 0;
             const sum = cpu.registers.a + value;
-            cpu.registers.a = sum & 0xff;
+            cpu.registers.a = sum;
 
             // update flags
             cpu.registers.zeroFlag = cpu.registers.a === 0 ? 1 : 0;
@@ -1233,23 +1275,20 @@ function generateOpcodeTable() {
     );
 
     // handle ADD SP, imm8
-    const executeAddSpImm8 = (cpu: Cpu, value: number) => {
-        const signedValue = (value << 24) >> 24;
-        const sum = cpu.registers.sp + signedValue;
-
-        cpu.registers.halfCarryFlag =
-            (cpu.registers.sp & 0xff) + signedValue > 0xff ? 1 : 0;
-        cpu.registers.sp = sum & 0xffff;
-        cpu.registers.carryFlag = sum > 0xffff ? 1 : 0;
-        cpu.registers.zeroFlag = cpu.registers.sp === 0 ? 1 : 0;
-        cpu.registers.subtractFlag = 0;
-    };
-
-    // handle ADD SP, imm8
     table.set(
         Opcode.ADD_SP_imm8,
         defineInstruction('ADD', ['sp', 'imm8'], (cpu, _dest, value) => {
-            executeAddSpImm8(cpu, value);
+            const signedValue = (value << 24) >> 24;
+            const unsignedValue = value & 0xff;
+            const lowSp = cpu.registers.sp & 0xff;
+
+            cpu.registers.halfCarryFlag =
+                (lowSp & 0xf) + (unsignedValue & 0xf) > 0xf ? 1 : 0;
+            cpu.registers.carryFlag = lowSp + unsignedValue > 0xff ? 1 : 0;
+            cpu.registers.zeroFlag = 0;
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.sp = cpu.registers.sp + signedValue;
+
             return getCyclesFor(Opcode.ADD_SP_imm8);
         }),
     );
@@ -1258,8 +1297,16 @@ function generateOpcodeTable() {
     table.set(
         Opcode.LD_HL_SP_imm8,
         defineInstruction('LD', ['hl', 'imm8'], (cpu, _dest, value) => {
-            executeAddSpImm8(cpu, value);
-            cpu.registers.hl = cpu.registers.sp;
+            const signedValue = (value << 24) >> 24;
+            const unsignedValue = value & 0xff;
+            const lowSp = cpu.registers.sp & 0xff;
+
+            cpu.registers.halfCarryFlag =
+                (lowSp & 0xf) + (unsignedValue & 0xf) > 0xf ? 1 : 0;
+            cpu.registers.carryFlag = lowSp + unsignedValue > 0xff ? 1 : 0;
+            cpu.registers.zeroFlag = 0;
+            cpu.registers.subtractFlag = 0;
+            cpu.registers.hl = cpu.registers.sp + signedValue;
 
             return getCyclesFor(Opcode.LD_HL_SP_imm8);
         }),
@@ -1396,8 +1443,7 @@ function generatePrefixedOpcodeTable() {
             defineInstruction('RR', [register], cpu => {
                 const value = cpu.getR8Value(register);
                 const result =
-                    (((value >> 1) | (value << 7)) & 0xff) |
-                    (cpu.registers.carryFlag << 7);
+                    ((value >> 1) & 0xff) | (cpu.registers.carryFlag << 7);
 
                 cpu.setR8Value(register, result);
                 cpu.registers.zeroFlag = result === 0 ? 1 : 0;

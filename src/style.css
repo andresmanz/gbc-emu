@@ -22,4 +22,17 @@ body {
     align-items: center;
     justify-content: center;
     height: 100vh;
+    width: 90%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#screens {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    width: 100%;
+}
+
+#app {
+    width: 100%;
 }

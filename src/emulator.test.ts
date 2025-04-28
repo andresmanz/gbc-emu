@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { Emulator } from './emulator';
-import { Rom } from './memory/rom';
 import {
     DIV_ADDRESS,
     TAC_ADDRESS,
@@ -8,13 +7,14 @@ import {
     TMA_ADDRESS,
 } from './memory/gbMemoryBus';
 import { Interrupt, interruptVectors } from './interrupts';
+import { Mbc1 } from './memory/mbcs/mbc1';
 
 function setupBasic() {
     const emulator = new Emulator();
 
     const romData = new Uint8Array(0x8000);
     romData.fill(0x00); // 0x00 = NOP
-    emulator.memoryBus.setRom(new Rom(romData));
+    emulator.memoryBus.setRom(new Mbc1(romData));
 
     return emulator;
 }
