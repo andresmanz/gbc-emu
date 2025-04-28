@@ -44,27 +44,6 @@ export class Ppu {
     }
 
     tick(cycles: number) {
-        this.modeClock += cycles;
-        while (this.modeClock >= 456) {
-            // 456 cycles per scanline
-            this.modeClock -= 456;
-            this.currentScanline++;
-            this.memoryBus.write(LY_ADDRESS, this.currentScanline);
-            if (this.currentScanline === 144) {
-                // Enter VBlank
-                this.onVBlank?.();
-                this.activeMode = 1;
-            } else if (this.currentScanline > 153) {
-                this.currentScanline = 0;
-                this.memoryBus.write(LY_ADDRESS, this.currentScanline);
-                this.activeMode = 2;
-            } else if (this.currentScanline < 144) {
-                this.activeMode = 2; // Start OAM search each visible scanline
-            }
-        }
-
-        return;
-
         if (!this.isLcdEnabled) {
             return;
         }

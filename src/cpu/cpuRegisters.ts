@@ -1,26 +1,106 @@
 export class CpuRegisters {
-    a: number;
-    f: number;
-    b: number;
-    c: number;
-    d: number;
-    e: number;
-    h: number;
-    l: number;
-    pc: number;
-    sp: number;
+    private _a: number;
+    private _f: number;
+    private _b: number;
+    private _c: number;
+    private _d: number;
+    private _e: number;
+    private _h: number;
+    private _l: number;
+    private _pc: number;
+    private _sp: number;
 
     constructor() {
-        this.a = 0;
-        this.f = 0;
-        this.b = 0;
-        this.c = 0;
-        this.d = 0;
-        this.e = 0;
-        this.h = 0;
-        this.l = 0;
-        this.pc = 0;
-        this.sp = 0;
+        this._a = 0;
+        this._f = 0;
+        this._b = 0;
+        this._c = 0;
+        this._d = 0;
+        this._e = 0;
+        this._h = 0;
+        this._l = 0;
+        this._pc = 0;
+        this._sp = 0;
+    }
+
+    get a() {
+        return this._a;
+    }
+
+    set a(value: number) {
+        this._a = value & 0xff;
+    }
+
+    get f() {
+        return this._f;
+    }
+
+    set f(value: number) {
+        this._f = value & 0xff;
+    }
+
+    get b() {
+        return this._b;
+    }
+
+    set b(value: number) {
+        this._b = value & 0xff;
+    }
+
+    get c() {
+        return this._c;
+    }
+
+    set c(value: number) {
+        this._c = value & 0xff;
+    }
+
+    get d() {
+        return this._d;
+    }
+
+    set d(value: number) {
+        this._d = value & 0xff;
+    }
+
+    get e() {
+        return this._e;
+    }
+
+    set e(value: number) {
+        this._e = value & 0xff;
+    }
+
+    get h() {
+        return this._h;
+    }
+
+    set h(value: number) {
+        this._h = value & 0xff;
+    }
+
+    get l() {
+        return this._l;
+    }
+
+    set l(value: number) {
+        this._l = value & 0xff;
+    }
+
+    get pc() {
+        return this._pc;
+    }
+
+    set pc(value: number) {
+        this._pc = value & 0xffff;
+    }
+
+    get sp() {
+        return this._sp;
+    }
+
+    set sp(value: number) {
+        this._sp = value & 0xffff;
     }
 
     get af(): number {
