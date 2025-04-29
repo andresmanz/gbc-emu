@@ -4078,4 +4078,129 @@ describe('when multiple interrupts are triggered', () => {
     });
 });
 
-describe('HALT', () => {});
+describe('HALT', () => {
+    it('does not execute any instructions if halted', () => {
+        const { cpu } = setupWithRomData([Opcode.HALT, Opcode.NOP, Opcode.NOP]);
+        cpu.areInterruptsEnabled = true;
+
+        cpu.step();
+        cpu.step();
+        cpu.step();
+
+        expect(cpu.registers.pc).toBe(0x101);
+    });
+
+    describe('when IME flag is set', () => {
+        it('enters low power mode', () => {
+            const { cpu } = setupWithRomData([Opcode.HALT]);
+            cpu.areInterruptsEnabled = true;
+
+            cpu.step();
+
+            expect(cpu.isHalted).toBe(true);
+        });
+
+        describe('and an interrupt is requested', () => {
+            function setupWithTimerInterruptRequested() {
+                const { cpu, interruptController } = setupWithRomData([
+                    Opcode.HALT,
+                    Opcode.NOP,
+                    Opcode.NOP,
+                ]);
+                cpu.areInterruptsEnabled = true;
+
+                cpu.step();
+                interruptController.requestInterrupt(Interrupt.Timer);
+
+                return cpu;
+            }
+
+            it('executes the interrupt handler', () => {
+                const cpu = setupWithTimerInterruptRequested();
+
+                cpu.step();
+
+                expect(cpu.registers.pc).toBe(
+                    interruptVectors[Interrupt.Timer],
+                );
+            });
+
+            it('leaves low power mode when interrupt is about to be serviced', () => {
+                const cpu = setupWithTimerInterruptRequested();
+
+                cpu.step();
+
+                expect(cpu.isHalted).toBe(false);
+            });
+        });
+    });
+
+    describe('when IME flag is not set', () => {
+        describe('and no interrupts are pending', () => {
+            it('enters low power mode', () => {
+                const { cpu } = setupWithRomData([Opcode.HALT]);
+                cpu.areInterruptsEnabled = false;
+
+                cpu.step();
+
+                expect(cpu.isHalted).toBe(true);
+            });
+
+            describe('and an interrupt becomes pending', () => {
+                function setupWithTimerInterruptPending() {
+                    const { cpu, interruptController } = setupWithRomData([
+                        Opcode.HALT,
+                        Opcode.NOP,
+                        Opcode.NOP,
+                    ]);
+                    cpu.areInterruptsEnabled = false;
+
+                    cpu.step();
+                    interruptController.requestInterrupt(Interrupt.Timer);
+
+                    return cpu;
+                }
+
+                it('leaves low power mode', () => {
+                    const cpu = setupWithTimerInterruptPending();
+
+                    cpu.step();
+
+                    expect(cpu.isHalted).toBe(false);
+                });
+
+                it('does not execute the interrupt handler', () => {
+                    const cpu = setupWithTimerInterruptPending();
+
+                    cpu.step();
+
+                    expect(cpu.registers.pc).toBe(0x102);
+                });
+            });
+        });
+
+        describe('and some interrupt is pending', () => {
+            function setupWithTimerInterruptPending() {
+                const { cpu, interruptController } = setupWithRomData([
+                    Opcode.HALT,
+                    Opcode.NOP,
+                    Opcode.NOP,
+                ]);
+                cpu.areInterruptsEnabled = false;
+
+                cpu.step();
+                interruptController.requestInterrupt(Interrupt.Timer);
+
+                return cpu;
+            }
+
+            it('reads the byte after HALT twice', () => {
+                const cpu = setupWithTimerInterruptPending();
+
+                cpu.step();
+
+                // TODO how to test that?
+            });
+        });
+    });
+});

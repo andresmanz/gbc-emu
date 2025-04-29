@@ -1,8 +1,4 @@
-import {
-    Interrupt,
-    InterruptController,
-    interruptVectors,
-} from '../interrupts';
+import { InterruptController, interruptVectors } from '../interrupts';
 import { Logger } from '../logger';
 import { memoryLayout } from '../memory/gbMemoryBus';
 import { MemoryBus } from '../memory/memoryBus';
@@ -71,6 +67,7 @@ export class Cpu {
     private opcodeTable = new Map<Opcode, Instruction>();
     private ime = false;
     private enableImeAfter = 0;
+    public isHalted = false;
 
     constructor(
         memoryBus: MemoryBus,
@@ -101,11 +98,19 @@ export class Cpu {
      * no interrupts to serve. Returns the number of cycles it took.
      */
     step() {
-        if (this.ime && this.interruptController.hasPendingInterrupts()) {
-            this.serviceNextInterrupt();
+        if (this.interruptController.hasPendingInterrupts()) {
+            this.isHalted = false;
 
-            // servicing interrupt takes 20 T-cycles
-            return 20;
+            if (this.ime) {
+                this.serviceNextInterrupt();
+
+                // servicing interrupt takes 20 T-cycles
+                return 20;
+            }
+        }
+
+        if (this.isHalted) {
+            return 4;
         }
 
         const opcode = this.readNextByte();
@@ -117,11 +122,6 @@ export class Cpu {
 
         // execute operation and get number of cycles (T-states)
         const operands = this.fetchOperands(instruction.operands);
-
-        // TODO
-        if (instruction.mnemonic === 'DAA') {
-            //this.log = true;
-        }
 
         //this.logInstruction(instruction, operands);
         const cycles = instruction.execute(this, ...operands);
@@ -1358,9 +1358,23 @@ function generateOpcodeTable() {
         }),
     );
 
-    // TODO: handle HALT
+    // handle HALT
+    table.set(
+        Opcode.HALT,
+        defineInstruction('HALT', [], cpu => {
+            cpu.isHalted = true;
 
-    // TODO: handle STOP
+            return getCyclesFor(Opcode.HALT);
+        }),
+    );
+
+    // handle STOP
+    table.set(
+        Opcode.STOP,
+        defineInstruction('STOP', [], () => {
+            return getCyclesFor(Opcode.STOP);
+        }),
+    );
 
     return table;
 }
@@ -1605,8 +1619,6 @@ function generatePrefixedOpcodeTable() {
             );
         });
     }
-
-    // handle HALT
 
     return table;
 }
