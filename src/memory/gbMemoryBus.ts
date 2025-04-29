@@ -232,7 +232,7 @@ export class GbMemoryBus implements MemoryBus {
             address: SC_ADDRESS,
             read: () => 0,
             write: () => {
-                console.log('serial log: ' + this.serialLog);
+                //console.log('serial log: ' + this.serialLog);
             },
         });
 

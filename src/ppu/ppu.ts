@@ -157,9 +157,6 @@ export class Ppu {
 
         const y = this.ly; // LY
 
-        //const bgTileMapAddr = this.lcdc & 0x08 ? 0x9c00 : 0x9800;
-        //const tileDataAddr = this.lcdc & 0x10 ? 0x8000 : 0x8800;
-
         const bgTileMapAddr = this.lcdc & 0x08 ? 0x1c00 : 0x1800;
         const tileDataAddr = this.lcdc & 0x10 ? 0x0000 : 0x0800;
 
