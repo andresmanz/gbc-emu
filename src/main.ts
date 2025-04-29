@@ -67,8 +67,6 @@ function getColor(colorId: number): string {
     return colors[colorId];
 }
 
-const CYCLES_PER_FRAME = 70224; // 456 cycles/line * 154 lines
-
 const emulator = new Emulator();
 const romInput = document.querySelector<HTMLInputElement>('#romInput');
 const screenCanvas = document.querySelector<HTMLCanvasElement>('#screenCanvas');
@@ -82,19 +80,34 @@ function updateLog() {
     }
 }
 
-function frame() {
-    emulator.step(CYCLES_PER_FRAME);
+const CLOCK_HZ = 4194304; // Game Boy CPU speed
+let lastTime = performance.now();
+let leftoverCycles = 0;
 
+function emuLoop(now: number) {
+    if (isPaused) {
+        requestAnimationFrame(emuLoop);
+        return;
+    }
+
+    const deltaTimeMs = now - lastTime;
+    lastTime = now;
+
+    // Total cycles to simulate based on real time passed
+    const targetCycles = (deltaTimeMs / 1000) * CLOCK_HZ + leftoverCycles;
+    const cyclesToRun = Math.floor(targetCycles);
+    leftoverCycles = targetCycles - cyclesToRun;
+
+    // run CPU until target cycles for this frame are simulated
+    emulator.step(cyclesToRun);
+
+    // render (just draws the last written framebuffer)
     if (tileCtx) {
         const tiles = decodeTiles(emulator.memoryBus);
         renderTiles(tileCtx, tiles);
     }
 
-    if (!isPaused) {
-        requestAnimationFrame(frame);
-    }
-
-    updateLog();
+    requestAnimationFrame(emuLoop);
 }
 
 if (romInput && screenCanvas) {
@@ -118,7 +131,7 @@ if (romInput && screenCanvas) {
                     const data = new Uint8Array(arrayBuffer);
                     emulator.loadRom(data);
 
-                    requestAnimationFrame(frame);
+                    requestAnimationFrame(emuLoop);
                 };
 
                 reader.readAsArrayBuffer(file);
@@ -155,7 +168,7 @@ if (romInput && screenCanvas) {
             isPaused = !isPaused;
 
             if (!isPaused) {
-                requestAnimationFrame(frame);
+                requestAnimationFrame(emuLoop);
                 pauseButton.innerHTML = 'Pause';
             } else {
                 pauseButton.innerHTML = 'Resume';
