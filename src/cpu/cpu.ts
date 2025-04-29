@@ -1432,9 +1432,7 @@ function generatePrefixedOpcodeTable() {
             opcode,
             defineInstruction('RL', [register], cpu => {
                 const value = cpu.getR8Value(register);
-                const result =
-                    (((value << 1) | (value >> 7)) & 0xff) |
-                    cpu.registers.carryFlag;
+                const result = ((value << 1) & 0xff) | cpu.registers.carryFlag;
 
                 cpu.setR8Value(register, result);
                 cpu.registers.zeroFlag = result === 0 ? 1 : 0;

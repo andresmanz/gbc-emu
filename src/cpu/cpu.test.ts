@@ -3412,7 +3412,7 @@ describe.for(r8Registers)('RL %s', register => {
 
     it('sets the zero flag if result is 0', () => {
         const { cpu } = setupWithRomData([Opcode.PREFIX_CB, opcode]);
-        cpu.setR8Value(register, 0b00000000);
+        cpu.setR8Value(register, 0b10000000);
         cpu.registers.carryFlag = 0;
 
         cpu.step();
