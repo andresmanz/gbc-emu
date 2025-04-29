@@ -11,26 +11,6 @@ const vramBase = 0x8000;
 
 let isPaused = false;
 
-function download(filename: string, text: string) {
-    const element = document.createElement('a');
-    element.setAttribute(
-        'href',
-        'data:text/plain;charset=utf-8,' + encodeURIComponent(text),
-    );
-    element.setAttribute('download', filename);
-
-    element.style.display = 'none';
-    document.body.appendChild(element);
-
-    element.click();
-
-    document.body.removeChild(element);
-}
-
-function downloadLog() {
-    download('log.txt', emulator.logger.lines.join('\n'));
-}
-
 function decodeTiles(memoryBus: MemoryBus): number[][] {
     const tiles: number[][] = [];
 
@@ -98,7 +78,7 @@ const logContainer = document.querySelector<HTMLDivElement>('#logs');
 
 function updateLog() {
     if (logContainer) {
-        logContainer.innerHTML = emulator.logger.lines.slice(-20).join('<br>');
+        //logContainer.innerHTML = emulator.logger.lines.slice(-20).join('<br>');
     }
 }
 
@@ -181,10 +161,5 @@ if (romInput && screenCanvas) {
                 pauseButton.innerHTML = 'Resume';
             }
         });
-
-        const downloadLogButton =
-            document.querySelector<HTMLButtonElement>('#downloadLogButton');
-
-        downloadLogButton?.addEventListener('click', downloadLog);
     }
 }

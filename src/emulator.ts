@@ -90,8 +90,6 @@ export class Emulator {
         this.memoryBus.write(0xffff, 0x00);
 
         this.cpu.reset();
-
-        this.cpu.logForGameboyDoctor();
     }
 
     step(minCyclesToRun: number): void {

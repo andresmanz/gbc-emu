@@ -168,17 +168,14 @@ export class Ppu {
             const tileRow = Math.floor(pixelY / 8);
 
             const tileMapIndex = tileRow * 32 + tileCol;
-            //const tileIndex = this.memoryBus.read(bgTileMapAddr + tileMapIndex);
             const tileIndex = this.videoRam.read(bgTileMapAddr + tileMapIndex);
 
             let tileAddress;
-            //if (tileDataAddr === 0x8000) {
             if (tileDataAddr === 0x0000) {
                 tileAddress = tileDataAddr + tileIndex * 16;
             } else {
                 // signed index for 0x8800 region
                 const signedIndex = Int8Array.of(tileIndex)[0];
-                //tileAddress = 0x9000 + signedIndex * 16;
                 tileAddress = 0x1000 + signedIndex * 16;
             }
 
@@ -212,10 +209,10 @@ export class Ppu {
                     break;
             }
 
-            this.framebuffer[index + 0] = shade; // Red
-            this.framebuffer[index + 1] = shade; // Green
-            this.framebuffer[index + 2] = shade; // Blue
-            this.framebuffer[index + 3] = 255; // Alpha (opaque)
+            this.framebuffer[index + 0] = shade; // r
+            this.framebuffer[index + 1] = shade; // g
+            this.framebuffer[index + 2] = shade; // b
+            this.framebuffer[index + 3] = 255; // a
         }
     }
 }

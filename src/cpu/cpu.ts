@@ -24,6 +24,14 @@ type Register16 =
 
 type ConditionOperand = 'condZ' | 'condNZ' | 'condC' | 'condNC'; // Condition codes for certain opcodes
 
+function isRegister8(value: Operand | number): value is Register8 {
+    return value in r8Registers;
+}
+
+function isRegister16(value: Operand | number): value is Register16 {
+    return value in r16Registers;
+}
+
 type Operand =
     | Register8
     | Register16
@@ -122,8 +130,6 @@ export class Cpu {
 
         // execute operation and get number of cycles (T-states)
         const operands = this.fetchOperands(instruction.operands);
-
-        //this.logInstruction(instruction, operands);
         const cycles = instruction.execute(this, ...operands);
 
         // check if we need to enable interrupts
@@ -134,8 +140,6 @@ export class Cpu {
                 this.ime = true;
             }
         }
-
-        this.logForGameboyDoctor();
 
         return cycles;
     }
@@ -175,11 +179,11 @@ export class Cpu {
                     return '0x' + value.toString(16);
                 }
 
-                if (r8Registers.includes(value)) {
-                    return this.getR8Value(value as Register8);
+                if (isRegister8(value)) {
+                    return this.getR8Value(value);
                 }
 
-                if (r16Registers.includes(value)) {
+                if (isRegister16(value)) {
                     return this.registers[value as Register16];
                 }
 
