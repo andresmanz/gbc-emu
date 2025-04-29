@@ -102,35 +102,11 @@ export class Cpu {
      */
     step() {
         if (this.ime && this.interruptController.hasPendingInterrupts()) {
-            this.serviceInterrupts();
+            this.serviceNextInterrupt();
 
             // servicing interrupt takes 20 T-cycles
             return 20;
         }
-
-        //A:00 F:11 B:22 C:33 D:44 E:55 H:66 L:77 SP:8888 PC:9999 PCMEM:AA,BB,CC,DD
-        const toHexStr = (value: number, length = 2) =>
-            value.toString(16).toUpperCase().padStart(length, '0');
-
-        const a = toHexStr(this.registers.a);
-        const f = toHexStr(this.registers.f);
-        const b = toHexStr(this.registers.b);
-        const c = toHexStr(this.registers.c);
-        const d = toHexStr(this.registers.d);
-        const e = toHexStr(this.registers.e);
-        const h = toHexStr(this.registers.h);
-        const l = toHexStr(this.registers.l);
-        const sp = toHexStr(this.registers.sp, 4);
-        const pc = toHexStr(this.registers.pc, 4);
-        const pcMem0 = toHexStr(this.memoryBus.read(this.registers.pc));
-        const pcMem1 = toHexStr(this.memoryBus.read(this.registers.pc + 1));
-        const pcMem2 = toHexStr(this.memoryBus.read(this.registers.pc + 2));
-        const pcMem3 = toHexStr(this.memoryBus.read(this.registers.pc + 3));
-        const pcMem = `${pcMem0},${pcMem1},${pcMem2},${pcMem3}`;
-
-        this.logger?.log(
-            `A:${a} F:${f} B:${b} C:${c} D:${d} E:${e} H:${h} L:${l} SP:${sp} PC:${pc} PCMEM:${pcMem}`,
-        );
 
         const opcode = this.readNextByte();
         const instruction = this.opcodeTable.get(opcode);
@@ -159,7 +135,34 @@ export class Cpu {
             }
         }
 
+        this.logForGameboyDoctor();
+
         return cycles;
+    }
+
+    public logForGameboyDoctor() {
+        const toHexStr = (value: number, length = 2) =>
+            value.toString(16).toUpperCase().padStart(length, '0');
+
+        const a = toHexStr(this.registers.a);
+        const f = toHexStr(this.registers.f);
+        const b = toHexStr(this.registers.b);
+        const c = toHexStr(this.registers.c);
+        const d = toHexStr(this.registers.d);
+        const e = toHexStr(this.registers.e);
+        const h = toHexStr(this.registers.h);
+        const l = toHexStr(this.registers.l);
+        const sp = toHexStr(this.registers.sp, 4);
+        const pc = toHexStr(this.registers.pc, 4);
+        const pcMem0 = toHexStr(this.memoryBus.read(this.registers.pc));
+        const pcMem1 = toHexStr(this.memoryBus.read(this.registers.pc + 1));
+        const pcMem2 = toHexStr(this.memoryBus.read(this.registers.pc + 2));
+        const pcMem3 = toHexStr(this.memoryBus.read(this.registers.pc + 3));
+        const pcMem = `${pcMem0},${pcMem1},${pcMem2},${pcMem3}`;
+
+        this.logger?.log(
+            `A:${a} F:${f} B:${b} C:${c} D:${d} E:${e} H:${h} L:${l} SP:${sp} PC:${pc} PCMEM:${pcMem}`,
+        );
     }
 
     private logInstruction(
@@ -253,23 +256,19 @@ export class Cpu {
         this.enableImeAfter = 2;
     }
 
-    private serviceInterrupts() {
+    private serviceNextInterrupt() {
         const pendingInterrupt = this.interruptController.getNextInterrupt();
 
         if (pendingInterrupt !== null) {
-            this.serviceInterrupt(pendingInterrupt);
+            // disable further interrupts
+            this.ime = false;
+
+            // push PC to stack and jump to handler address
+            this.pushWordToStack(new Word16(this.registers.pc));
+            this.registers.pc = interruptVectors[pendingInterrupt];
+
+            this.interruptController.clearInterrupt(pendingInterrupt);
         }
-    }
-
-    private serviceInterrupt(interrupt: Interrupt) {
-        // disable further interrupts
-        this.ime = false;
-
-        // push PC to stack and jump to handler address
-        this.pushWordToStack(new Word16(this.registers.pc));
-        this.registers.pc = interruptVectors[interrupt];
-
-        this.interruptController.clearInterrupt(interrupt);
     }
 
     pushWordToStack(word: Word16) {
@@ -1355,7 +1354,7 @@ function generateOpcodeTable() {
                 );
             }
 
-            return instruction.execute(cpu);
+            return getCyclesFor(Opcode.PREFIX_CB) + instruction.execute(cpu);
         }),
     );
 

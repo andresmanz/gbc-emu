@@ -90,6 +90,8 @@ export class Emulator {
         this.memoryBus.write(0xffff, 0x00);
 
         this.cpu.reset();
+
+        this.cpu.logForGameboyDoctor();
     }
 
     step(minCyclesToRun: number): void {
@@ -97,8 +99,12 @@ export class Emulator {
 
         while (cyclesExecuted < minCyclesToRun) {
             const cycles = this.cpu.step();
-            this.ppu.tick(cycles);
-            this.timer.update(cycles);
+            const mCycles = cycles / 4;
+
+            for (let i = 0; i < mCycles; ++i) {
+                this.timer.update(4);
+                this.ppu.tick(4);
+            }
 
             cyclesExecuted += cycles;
         }
