@@ -36,3 +36,7 @@ body {
 #app {
     width: 100%;
 }
+
+#log {
+    overflow-y: auto;
+}

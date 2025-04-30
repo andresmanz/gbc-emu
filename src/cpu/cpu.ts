@@ -130,6 +130,7 @@ export class Cpu {
 
         // execute operation and get number of cycles (T-states)
         const operands = this.fetchOperands(instruction.operands);
+        this.logInstruction(instruction, operands);
         const cycles = instruction.execute(this, ...operands);
 
         // check if we need to enable interrupts
@@ -192,12 +193,12 @@ export class Cpu {
             .join(', ');
 
         this.logger?.log(
-            `execute: ${instruction.mnemonic} ${instruction.operands.map(operand => operand.toUpperCase()).join(', ')} - (${operandsDebugString})`,
+            `execute: ${instruction.mnemonic} ${instruction.operands.map(operand => operand.toUpperCase()).join(', ')} - (${operandsDebugString}) ; value at 0xff44: ${this.memoryBus.read(0xff44)}`,
         );
     }
 
     private fetchOperands(operandTypes: Operand[]) {
-        const values = [];
+        const values: (Operand | number)[] = [];
 
         for (const type of operandTypes) {
             if (type === 'imm8') {
@@ -207,7 +208,7 @@ export class Cpu {
             } else if (type === 'imm16') {
                 values.push(this.readNextWord());
             } else if (type.startsWith('cond')) {
-                values.push(type.substring(4));
+                values.push(type.substring(4) as ConditionOperand);
             } else {
                 values.push(type);
             }

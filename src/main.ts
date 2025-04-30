@@ -76,7 +76,7 @@ const logContainer = document.querySelector<HTMLDivElement>('#logs');
 
 function updateLog() {
     if (logContainer) {
-        //logContainer.innerHTML = emulator.logger.lines.slice(-20).join('<br>');
+        logContainer.innerHTML = emulator.logger.lines.slice(-20).join('<br>');
     }
 }
 
@@ -93,7 +93,7 @@ function emuLoop(now: number) {
     const deltaTimeMs = now - lastTime;
     lastTime = now;
 
-    // Total cycles to simulate based on real time passed
+    // calculate total cycles to simulate based on real time passed
     const targetCycles = (deltaTimeMs / 1000) * CLOCK_HZ + leftoverCycles;
     const cyclesToRun = Math.floor(targetCycles);
     leftoverCycles = targetCycles - cyclesToRun;
@@ -101,7 +101,6 @@ function emuLoop(now: number) {
     // run CPU until target cycles for this frame are simulated
     emulator.step(cyclesToRun);
 
-    // render (just draws the last written framebuffer)
     if (tileCtx) {
         const tiles = decodeTiles(emulator.memoryBus);
         renderTiles(tileCtx, tiles);
@@ -141,12 +140,18 @@ if (romInput && screenCanvas) {
         const stepButton =
             document.querySelector<HTMLButtonElement>('#stepButton');
 
-        if (stepButton) {
-            stepButton.addEventListener('click', () => {
-                emulator.step(1);
-                updateLog();
-            });
-        }
+        stepButton?.addEventListener('click', () => {
+            emulator.step(1);
+            updateLog();
+        });
+
+        const step1000Button =
+            document.querySelector<HTMLButtonElement>('#step1000Button');
+
+        step1000Button?.addEventListener('click', () => {
+            emulator.step(1000);
+            updateLog();
+        });
 
         const readAddressButton =
             document.querySelector<HTMLButtonElement>('#readAddressButton');
