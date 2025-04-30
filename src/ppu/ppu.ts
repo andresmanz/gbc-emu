@@ -147,6 +147,10 @@ export class Ppu {
         if (this.lineTicks >= OAM_SCAN_LINE_TICKS + PIXEL_TRANSFER_LINE_TICKS) {
             this.renderScanline();
             this.stat.ppuMode = PpuMode.HBlank;
+
+            if (this.stat.isInterruptEnabled(LcdInterruptType.HBlank)) {
+                this.onStatInterrupt?.();
+            }
         }
     }
 
