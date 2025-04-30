@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { MockMemoryBus } from '../tests/mockMemoryBus';
-import { Timer } from '../timer';
 import { Ppu, PpuMode } from './ppu';
+import { Ram } from '../memory/ram';
 
 function setupBasic() {
-    const timer = new Timer();
-    const ppu = new Ppu(new MockMemoryBus(0x10000, timer));
+    const ppu = new Ppu(new Ram(new Uint8Array(0x2000)));
     return ppu;
 }
 
@@ -15,7 +13,7 @@ it('does not change the mode after 80 cycles when LCD is disabled', () => {
 
     ppu.tick(81);
 
-    expect(ppu.activeMode).toBe(PpuMode.OamScan);
+    expect(ppu.stat.ppuMode).toBe(PpuMode.OamScan);
 });
 
 describe('when LCD is enabled', () => {
@@ -30,6 +28,6 @@ describe('when LCD is enabled', () => {
 
         ppu.tick(81);
 
-        expect(ppu.activeMode).toBe(PpuMode.PixelTransfer);
+        expect(ppu.stat.ppuMode).toBe(PpuMode.PixelTransfer);
     });
 });

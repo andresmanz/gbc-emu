@@ -1,3 +1,4 @@
+import { getBit, setBit } from '../byteUtil';
 import { Ram } from '../memory/ram';
 
 enum LcdControlBit {
@@ -11,6 +12,30 @@ enum LcdControlBit {
     LcdPpuEnable,
 }
 
+enum LcdInterruptType {
+    HBlank,
+    VBlank,
+    Oam,
+    Lyc,
+}
+
+const lcdInterruptBitIndices = {
+    [LcdInterruptType.HBlank]: 3,
+    [LcdInterruptType.VBlank]: 4,
+    [LcdInterruptType.Oam]: 5,
+    [LcdInterruptType.Lyc]: 6,
+};
+
+enum LcdStatusBit {
+    PpuModeBit0,
+    PpuModeBit1,
+    LycEqualsLy,
+    Mode0Select,
+    Mode1Select,
+    Mode2Select,
+    LycInterrupt,
+}
+
 export enum PpuMode {
     HBlank = 0,
     VBlank = 1,
@@ -18,25 +43,57 @@ export enum PpuMode {
     PixelTransfer = 3,
 }
 
-const modeCycles = {
-    [PpuMode.HBlank]: 204,
-    [PpuMode.VBlank]: 456,
-    [PpuMode.OamScan]: 80,
-    [PpuMode.PixelTransfer]: 172,
-};
+class LcdStatus {
+    public value = 0;
+
+    public get ppuMode() {
+        return this.value & 0b11;
+    }
+
+    public set ppuMode(value: PpuMode) {
+        this.value = (this.value & 0b11111100) | value;
+    }
+
+    public get lycEqualsLy() {
+        return getBit(this.value, LcdStatusBit.LycEqualsLy);
+    }
+
+    public set lycEqualsLy(value: number) {
+        this.value = setBit(this.value, LcdStatusBit.LycEqualsLy, value);
+    }
+
+    public isInterruptEnabled(interruptType: LcdInterruptType) {
+        return getBit(this.value, lcdInterruptBitIndices[interruptType]);
+    }
+
+    public setInterruptEnabled(interruptType: LcdInterruptType) {
+        this.value = setBit(
+            this.value,
+            LcdStatusBit.LycInterrupt,
+            lcdInterruptBitIndices[interruptType],
+        );
+    }
+}
+
+const OAM_SCAN_LINE_TICKS = 80;
+const PIXEL_TRANSFER_LINE_TICKS = 172;
+const TICKS_PER_LINE = 456;
+const LINES_PER_FRAME = 154;
+const RESOLUTION_HEIGHT = 144;
 
 export class Ppu {
-    private framebuffer = new Uint8ClampedArray(160 * 144 * 4);
-    private mode = PpuMode.OamScan;
-    private modeClock = 0;
+    public readonly framebuffer = new Uint8ClampedArray(160 * 144 * 4);
+    private lineTicks = 0;
     public lcdc = 0;
-    public stat = 0;
-    public ly = 0;
+    public stat = new LcdStatus();
+    public _ly = 0;
+    public lyc = 0;
     public scrollY = 0;
     public scrollX = 0;
     public palette = 0;
 
     onVBlank?: () => void;
+    onStatInterrupt?: () => void;
     onFrameComplete?: (framebuffer: Uint8ClampedArray) => void;
 
     constructor(private videoRam: Ram) {
@@ -48,9 +105,9 @@ export class Ppu {
             return;
         }
 
-        this.modeClock += cycles;
+        this.lineTicks += cycles;
 
-        switch (this.mode) {
+        switch (this.stat.ppuMode) {
             case PpuMode.OamScan:
                 this.tickOam();
                 break;
@@ -66,63 +123,70 @@ export class Ppu {
         }
     }
 
+    public get ly() {
+        return this._ly;
+    }
+
+    private set ly(value: number) {
+        this._ly = value;
+
+        this.stat.lycEqualsLy = this.ly === this.lyc ? 1 : 0;
+
+        if (this.stat.isInterruptEnabled(LcdInterruptType.Lyc)) {
+            this.onStatInterrupt?.();
+        }
+    }
+
     private tickOam() {
-        const targetCycles = modeCycles[PpuMode.OamScan];
-
-        if (this.modeClock >= targetCycles) {
-            this.modeClock -= targetCycles;
-
-            this.activeMode = PpuMode.PixelTransfer;
+        if (this.lineTicks >= OAM_SCAN_LINE_TICKS) {
+            this.stat.ppuMode = PpuMode.PixelTransfer;
         }
     }
 
     private tickTransfer() {
-        const targetCycles = modeCycles[PpuMode.PixelTransfer];
-
-        if (this.modeClock >= targetCycles) {
-            this.modeClock -= targetCycles;
-
+        if (this.lineTicks >= OAM_SCAN_LINE_TICKS + PIXEL_TRANSFER_LINE_TICKS) {
             this.renderScanline();
-            this.activeMode = PpuMode.HBlank;
+            this.stat.ppuMode = PpuMode.HBlank;
         }
     }
 
     private tickHBlank() {
-        const targetCycles = modeCycles[PpuMode.HBlank];
-
-        if (this.modeClock >= targetCycles) {
-            this.modeClock -= targetCycles;
-
+        if (this.lineTicks >= TICKS_PER_LINE) {
             this.ly++;
 
-            if (this.ly === 144) {
-                this.activeMode = PpuMode.VBlank;
+            if (this.ly >= RESOLUTION_HEIGHT) {
+                this.stat.ppuMode = PpuMode.VBlank;
                 this.onVBlank?.();
-                this.onFrameComplete?.(this.framebuffer); // trigger screen update
+
+                if (this.stat.isInterruptEnabled(LcdInterruptType.VBlank)) {
+                    this.onStatInterrupt?.();
+                }
+
+                this.onFrameComplete?.(this.framebuffer);
             } else {
-                this.activeMode = PpuMode.OamScan;
+                this.stat.ppuMode = PpuMode.OamScan;
             }
+
+            this.lineTicks = 0;
         }
     }
 
     private tickVBlank() {
-        const targetCycles = modeCycles[PpuMode.VBlank];
-
-        if (this.modeClock >= targetCycles) {
-            this.modeClock -= targetCycles;
-
+        if (this.lineTicks >= TICKS_PER_LINE) {
             this.ly++;
 
-            if (this.ly > 153) {
+            if (this.ly >= LINES_PER_FRAME) {
                 this.ly = 0;
-                this.activeMode = PpuMode.OamScan;
+                this.stat.ppuMode = PpuMode.OamScan;
             }
+
+            this.lineTicks = 0;
         }
     }
 
     private reset() {
-        this.activeMode = PpuMode.OamScan;
-        this.modeClock = 0;
+        this.stat.ppuMode = PpuMode.OamScan;
+        this.lineTicks = 0;
         this.framebuffer.fill(0);
     }
 
@@ -142,27 +206,19 @@ export class Ppu {
         this.lcdc &= mask;
     }
 
-    get activeMode() {
-        return this.mode;
-    }
-
-    private set activeMode(newMode: PpuMode) {
-        this.mode = newMode;
-        this.stat = (this.stat & 0xfc) | newMode;
-    }
-
     private renderScanline() {
         const bgEnabled = (this.lcdc & 0x01) !== 0;
-        if (!bgEnabled) return;
 
-        const y = this.ly; // LY
+        if (!bgEnabled) {
+            return;
+        }
 
         const bgTileMapAddr = this.lcdc & 0x08 ? 0x1c00 : 0x1800;
         const tileDataAddr = this.lcdc & 0x10 ? 0x0000 : 0x0800;
 
         for (let x = 0; x < 160; x++) {
             const pixelX = (x + this.scrollX) & 0xff;
-            const pixelY = (y + this.scrollY) & 0xff;
+            const pixelY = (this.ly + this.scrollY) & 0xff;
 
             const tileCol = Math.floor(pixelX / 8);
             const tileRow = Math.floor(pixelY / 8);
@@ -191,7 +247,7 @@ export class Ppu {
 
             const color = (this.palette >> (colorId * 2)) & 0x03;
 
-            const index = (y * 160 + x) * 4;
+            const index = (this.ly * 160 + x) * 4;
 
             let shade = 0;
             switch (color) {

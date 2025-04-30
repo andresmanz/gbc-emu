@@ -39,6 +39,7 @@ export const STAT_ADDRESS = 0xff41;
 export const SCY_ADDRESS = 0xff42;
 export const SCX_ADDRESS = 0xff43;
 export const LY_ADDRESS = 0xff44;
+export const LYC_ADDRESS = 0xff45;
 export const PALETTE_ADDRESS = 0xff47;
 
 /**
@@ -202,14 +203,24 @@ export class GbMemoryBus implements MemoryBus {
 
         this.functionMap.mapSingleAddress({
             address: STAT_ADDRESS,
-            read: () => this.ppu.stat,
-            write: value => (this.ppu.stat = value),
+            read: () => this.ppu.stat.value,
+            write: value => {
+                this.ppu.stat.value = value;
+            },
         });
 
         this.functionMap.mapSingleAddress({
             address: LY_ADDRESS,
             read: () => this.ppu.ly,
             write: () => {},
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: LYC_ADDRESS,
+            read: () => this.ppu.lyc,
+            write: value => {
+                this.ppu.lyc = value;
+            },
         });
 
         this.functionMap.mapSingleAddress({

@@ -3976,7 +3976,7 @@ describe('triggerInterrupt', () => {
         const { cpu, interruptController } = setupWithRomData([]);
         cpu.memoryBus.write(IE_REGISTER_ADDRESS, 0b01010101);
 
-        interruptController.requestInterrupt(Interrupt.LCDStat);
+        interruptController.requestInterrupt(Interrupt.LcdStat);
 
         expect(cpu.memoryBus.read(IE_REGISTER_ADDRESS)).toBe(0b01010111);
     });
@@ -3985,7 +3985,7 @@ describe('triggerInterrupt', () => {
         const { cpu, interruptController } = setupWithRomData([]);
         cpu.memoryBus.write(IF_REGISTER_ADDRESS, 0b01010101);
 
-        interruptController.requestInterrupt(Interrupt.LCDStat);
+        interruptController.requestInterrupt(Interrupt.LcdStat);
 
         expect(cpu.memoryBus.read(IF_REGISTER_ADDRESS)).toBe(0b01010111);
     });
@@ -3999,7 +3999,7 @@ describe('after triggering an interrupt', () => {
     }
 
     it('does not service interrupts when IME is false', () => {
-        const cpu = setupWithInterruptTriggered(Interrupt.LCDStat);
+        const cpu = setupWithInterruptTriggered(Interrupt.LcdStat);
         cpu.areInterruptsEnabled = false;
 
         cpu.step();

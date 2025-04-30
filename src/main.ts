@@ -83,39 +83,51 @@ function updateLog() {
 const CLOCK_HZ = 4194304; // Game Boy CPU speed
 let lastTime = performance.now();
 let leftoverCycles = 0;
-
-function emuLoop(now: number) {
-    if (isPaused) {
-        requestAnimationFrame(emuLoop);
-        return;
-    }
-
-    const deltaTimeMs = now - lastTime;
-    lastTime = now;
-
-    // calculate total cycles to simulate based on real time passed
-    const targetCycles = (deltaTimeMs / 1000) * CLOCK_HZ + leftoverCycles;
-    const cyclesToRun = Math.floor(targetCycles);
-    leftoverCycles = targetCycles - cyclesToRun;
-
-    // run CPU until target cycles for this frame are simulated
-    emulator.step(cyclesToRun);
-
-    if (tileCtx) {
-        const tiles = decodeTiles(emulator.memoryBus);
-        renderTiles(tileCtx, tiles);
-    }
-
-    requestAnimationFrame(emuLoop);
-}
+let isFrameReady = false;
 
 if (romInput && screenCanvas) {
+    screenCanvas.width = 160;
+    screenCanvas.height = 144;
+
     const ctx = screenCanvas.getContext('2d');
 
     if (ctx) {
         const renderer = new CanvasRenderer(ctx);
-        emulator.ppu.onFrameComplete = framebuffer =>
-            renderer.render(framebuffer);
+
+        emulator.ppu.onFrameComplete = () => {
+            isFrameReady = true;
+        };
+
+        function emuLoop(now: number) {
+            if (isPaused) {
+                requestAnimationFrame(emuLoop);
+                return;
+            }
+
+            const deltaTimeMs = now - lastTime;
+            lastTime = now;
+
+            // calculate total cycles to simulate based on real time passed
+            const targetCycles =
+                (deltaTimeMs / 1000) * CLOCK_HZ + leftoverCycles;
+            const cyclesToRun = Math.floor(targetCycles);
+            leftoverCycles = targetCycles - cyclesToRun;
+
+            // run CPU until target cycles for this frame are simulated
+            emulator.step(cyclesToRun);
+
+            if (isFrameReady) {
+                isFrameReady = false;
+                renderer.render(emulator.ppu.framebuffer);
+
+                if (tileCtx) {
+                    const tiles = decodeTiles(emulator.memoryBus);
+                    renderTiles(tileCtx, tiles);
+                }
+            }
+
+            requestAnimationFrame(emuLoop);
+        }
 
         romInput.addEventListener('change', event => {
             const target = event.target as HTMLInputElement;
@@ -130,6 +142,7 @@ if (romInput && screenCanvas) {
                     const data = new Uint8Array(arrayBuffer);
                     emulator.loadRom(data);
 
+                    lastTime = performance.now();
                     requestAnimationFrame(emuLoop);
                 };
 

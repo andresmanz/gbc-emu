@@ -42,6 +42,9 @@ export class Emulator {
 
         this.ppu.onVBlank = () =>
             this.interruptController.requestInterrupt(Interrupt.VBlank);
+
+        this.ppu.onStatInterrupt = () =>
+            this.interruptController.requestInterrupt(Interrupt.LcdStat);
     }
 
     loadRom(data: Uint8Array): void {

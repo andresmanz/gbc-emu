@@ -40,3 +40,10 @@ body {
 #log {
     overflow-y: auto;
 }
+
+#screenCanvas {
+    margin-top: 2rem;
+    width: 8.8cm;
+    height: 8cm;
+    image-rendering: pixelated;
+}
