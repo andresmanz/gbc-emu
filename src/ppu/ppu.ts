@@ -1,5 +1,6 @@
 import { getBit, setBit } from '../byteUtil';
 import { Ram } from '../memory/ram';
+import { Oam } from './oam';
 
 enum LcdControlBit {
     BgAndWindowEnable,
@@ -83,9 +84,10 @@ const RESOLUTION_HEIGHT = 144;
 
 export class Ppu {
     public readonly framebuffer = new Uint8ClampedArray(160 * 144 * 4);
+    public readonly oam = new Oam();
     private lineTicks = 0;
     public lcdc = 0;
-    public stat = new LcdStatus();
+    public readonly stat = new LcdStatus();
     public _ly = 0;
     public lyc = 0;
     public scrollY = 0;

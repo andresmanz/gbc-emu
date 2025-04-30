@@ -48,7 +48,6 @@ export const PALETTE_ADDRESS = 0xff47;
 export class GbMemoryBus implements MemoryBus {
     private mbc: Mbc | null = null;
     private workRam = new Ram(new Uint8Array(0x2000)); // 8KB of WRAM
-    private oam = new Ram(new Uint8Array(0xa0));
     private highRam = new Ram(new Uint8Array(0x7f)); // 127 bytes of High RAM
     private functionMap: MemoryFunctionMap = new MemoryFunctionMap();
     private ieValue = 0;
@@ -139,9 +138,9 @@ export class GbMemoryBus implements MemoryBus {
         this.functionMap.map({
             start: memoryLayout.oamStart,
             end: memoryLayout.oamEnd,
-            read: this.oam.read,
+            read: this.ppu.oam.read,
             write: (address, value) => {
-                this.oam.write(address, value);
+                this.ppu.oam.write(address, value);
             },
         });
 
