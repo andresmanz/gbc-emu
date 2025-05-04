@@ -4,6 +4,7 @@ import { MemoryBus } from './memoryBus';
 import { Timer } from '../timer';
 import { Mbc } from './mbcs/mbc';
 import { Ppu } from '../ppu/ppu';
+import { Dma } from '../ppu/dma';
 
 export const memoryLayout = {
     romStart: 0x0000,
@@ -40,6 +41,7 @@ export const SCY_ADDRESS = 0xff42;
 export const SCX_ADDRESS = 0xff43;
 export const LY_ADDRESS = 0xff44;
 export const LYC_ADDRESS = 0xff45;
+export const DMA_START_ADDRESS = 0xff46;
 export const PALETTE_ADDRESS = 0xff47;
 
 /**
@@ -53,6 +55,7 @@ export class GbMemoryBus implements MemoryBus {
     private ieValue = 0;
     private ifValue = 0;
     public serialLog = '';
+    public onDmaStart?: (value: number) => void;
 
     // placeholder memory
     private joypadInput = 0;
@@ -63,6 +66,7 @@ export class GbMemoryBus implements MemoryBus {
         private timer: Timer,
         private ppu: Ppu,
         private videoRam: Ram,
+        private dma: Dma,
     ) {
         // initialize the memory bus with default mappings
         this.functionMap.map({
@@ -196,8 +200,8 @@ export class GbMemoryBus implements MemoryBus {
 
         this.functionMap.mapSingleAddress({
             address: LCD_CONTROL_ADDRESS,
-            read: () => this.ppu.lcdc,
-            write: value => (this.ppu.lcdc = value),
+            read: () => this.ppu.lcdControl.value,
+            write: value => (this.ppu.lcdControl.value = value),
         });
 
         this.functionMap.mapSingleAddress({
@@ -205,6 +209,22 @@ export class GbMemoryBus implements MemoryBus {
             read: () => this.ppu.stat.value,
             write: value => {
                 this.ppu.stat.value = value;
+            },
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: SCY_ADDRESS,
+            read: () => this.ppu.scrollY,
+            write: value => {
+                this.ppu.scrollY = value;
+            },
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: SCX_ADDRESS,
+            read: () => this.ppu.scrollX,
+            write: value => {
+                this.ppu.scrollX = value;
             },
         });
 
@@ -219,6 +239,16 @@ export class GbMemoryBus implements MemoryBus {
             read: () => this.ppu.lyc,
             write: value => {
                 this.ppu.lyc = value;
+            },
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: DMA_START_ADDRESS,
+            read: () => {
+                return this.dma.value;
+            },
+            write: value => {
+                this.dma.startTransfer(value);
             },
         });
 

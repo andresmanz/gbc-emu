@@ -14,6 +14,7 @@ import { Ram } from './memory/ram';
 import { Ppu } from './ppu/ppu';
 import { Timer } from './timer';
 import { Logger } from './logger';
+import { Dma } from './ppu/dma';
 
 export class Emulator {
     public readonly timer: Timer;
@@ -22,6 +23,7 @@ export class Emulator {
     public readonly cpu: Cpu;
     public readonly ppu: Ppu;
     public readonly logger: Logger;
+    public readonly dma: Dma;
 
     constructor() {
         this.logger = new Logger();
@@ -29,13 +31,22 @@ export class Emulator {
 
         this.timer = new Timer();
         this.ppu = new Ppu(videoRam);
-        this.memoryBus = new GbMemoryBus(this.timer, this.ppu, videoRam);
+        this.dma = new Dma();
+        this.memoryBus = new GbMemoryBus(
+            this.timer,
+            this.ppu,
+            videoRam,
+            this.dma,
+        );
+        this.dma.memoryBus = this.memoryBus;
         this.interruptController = new InterruptController(this.memoryBus);
         this.cpu = new Cpu(
             this.memoryBus,
             this.interruptController,
             this.logger,
         );
+
+        this.memoryBus.onDmaStart = value => this.dma.startTransfer(value);
 
         this.timer.onTimaOverflow = () =>
             this.interruptController.requestInterrupt(Interrupt.Timer);
@@ -103,8 +114,12 @@ export class Emulator {
             const mCycles = cycles / 4;
 
             for (let i = 0; i < mCycles; ++i) {
-                this.timer.update(4);
-                this.ppu.tick(4);
+                for (let e = 0; e < 4; ++e) {
+                    this.timer.update(1);
+                    this.ppu.tick(1);
+                }
+
+                this.dma.tick();
             }
 
             cyclesExecuted += cycles;

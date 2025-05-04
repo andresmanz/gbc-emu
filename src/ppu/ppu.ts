@@ -7,7 +7,7 @@ enum LcdControlBit {
     ObjEnable,
     ObjSize,
     BgTileMap,
-    BgAndWindowTiles,
+    BgAndWindowTileMap,
     WindowEnable,
     WindowTileMap,
     LcdPpuEnable,
@@ -42,6 +42,74 @@ export enum PpuMode {
     VBlank = 1,
     OamScan = 2,
     PixelTransfer = 3,
+}
+
+class LcdControl {
+    public value = 0;
+
+    public get isLcdAndPpuEnabled() {
+        return getBit(this.value, LcdControlBit.LcdPpuEnable);
+    }
+
+    public set isLcdAndPpuEnabled(value: number) {
+        setBit(this.value, LcdControlBit.LcdPpuEnable, value);
+    }
+
+    public get windowTileMap() {
+        return getBit(this.value, LcdControlBit.WindowTileMap);
+    }
+
+    public set windowTileMap(value: number) {
+        setBit(this.value, LcdControlBit.WindowTileMap, value);
+    }
+
+    public get isWindowEnabled() {
+        return getBit(this.value, LcdControlBit.WindowEnable);
+    }
+
+    public set isWindowEnabled(value: number) {
+        setBit(this.value, LcdControlBit.WindowEnable, value);
+    }
+
+    public get bgAndWindowTileMap() {
+        return getBit(this.value, LcdControlBit.BgAndWindowTileMap);
+    }
+
+    public set bgAndWindowTileMap(value: number) {
+        setBit(this.value, LcdControlBit.BgAndWindowTileMap, value);
+    }
+
+    public get bgTileMap() {
+        return getBit(this.value, LcdControlBit.BgTileMap);
+    }
+
+    public set bgTileMap(value: number) {
+        setBit(this.value, LcdControlBit.BgTileMap, value);
+    }
+
+    public get objSize() {
+        return getBit(this.value, LcdControlBit.ObjSize);
+    }
+
+    public set objSize(value: number) {
+        setBit(this.value, LcdControlBit.ObjSize, value);
+    }
+
+    public get isObjEnabled() {
+        return getBit(this.value, LcdControlBit.ObjEnable);
+    }
+
+    public set isObjEnabled(value: number) {
+        setBit(this.value, LcdControlBit.ObjEnable, value);
+    }
+
+    public get isBgAndWindowEnabled() {
+        return getBit(this.value, LcdControlBit.BgAndWindowEnable);
+    }
+
+    public set isBgAndWindowEnabled(value: number) {
+        setBit(this.value, LcdControlBit.BgAndWindowEnable, value);
+    }
 }
 
 class LcdStatus {
@@ -81,12 +149,13 @@ const PIXEL_TRANSFER_LINE_TICKS = 172;
 const TICKS_PER_LINE = 456;
 const LINES_PER_FRAME = 154;
 const RESOLUTION_HEIGHT = 144;
+const RESOLUTION_WIDTH = 160;
 
 export class Ppu {
     public readonly framebuffer = new Uint8ClampedArray(160 * 144 * 4);
     public readonly oam = new Oam();
     private lineTicks = 0;
-    public lcdc = 0;
+    public readonly lcdControl = new LcdControl();
     public readonly stat = new LcdStatus();
     public _ly = 0;
     public lyc = 0;
@@ -103,7 +172,7 @@ export class Ppu {
     }
 
     tick(cycles: number) {
-        if (!this.isLcdEnabled) {
+        if (!this.lcdControl.isLcdAndPpuEnabled) {
             return;
         }
 
@@ -196,33 +265,29 @@ export class Ppu {
         this.framebuffer.fill(0);
     }
 
-    private get isLcdEnabled() {
-        return (this.lcdc & (1 << LcdControlBit.LcdPpuEnable)) !== 0;
-    }
-
     public enableLcd() {
         this.reset();
 
-        const mask = 1 << LcdControlBit.LcdPpuEnable;
-        this.lcdc |= mask;
+        this.lcdControl.isLcdAndPpuEnabled = 1;
     }
 
     public disableLcd() {
-        const mask = ~(1 << LcdControlBit.LcdPpuEnable);
-        this.lcdc &= mask;
+        this.lcdControl.isLcdAndPpuEnabled = 0;
     }
 
     private renderScanline() {
-        const bgEnabled = (this.lcdc & 0x01) !== 0;
+        const bgEnabled = this.lcdControl.isBgAndWindowEnabled !== 0;
 
         if (!bgEnabled) {
             return;
         }
 
-        const bgTileMapAddr = this.lcdc & 0x08 ? 0x1c00 : 0x1800;
-        const tileDataAddr = this.lcdc & 0x10 ? 0x0000 : 0x0800;
+        const bgTileMapAddr =
+            this.lcdControl.bgTileMap & 0x08 ? 0x1c00 : 0x1800;
+        const tileDataAddr =
+            this.lcdControl.bgAndWindowTileMap & 0x10 ? 0x0000 : 0x0800;
 
-        for (let x = 0; x < 160; x++) {
+        for (let x = 0; x < RESOLUTION_WIDTH; x++) {
             const pixelX = (x + this.scrollX) & 0xff;
             const pixelY = (this.ly + this.scrollY) & 0xff;
 
