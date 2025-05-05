@@ -271,16 +271,14 @@ export class Ppu {
     }
 
     private renderScanline() {
-        const bgEnabled = this.lcdControl.isBgAndWindowEnabled !== 0;
-
-        if (!bgEnabled) {
+        if (!this.lcdControl.isBgAndWindowEnabled) {
             return;
         }
 
-        const bgTileMapAddr =
-            this.lcdControl.bgTileMap & 0x08 ? 0x1c00 : 0x1800;
-        const tileDataAddr =
-            this.lcdControl.bgAndWindowTileMap & 0x10 ? 0x0000 : 0x0800;
+        const bgTileMapAddr = this.lcdControl.bgTileMap ? 0x1c00 : 0x1800;
+        const tileDataAddr = this.lcdControl.bgAndWindowTileMap
+            ? 0x0000
+            : 0x0800;
 
         for (let x = 0; x < RESOLUTION_WIDTH; x++) {
             const pixelX = (x + this.scrollX) & 0xff;
