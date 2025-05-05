@@ -132,15 +132,7 @@ class LcdStatus {
     }
 
     public isInterruptEnabled(interruptType: LcdInterruptType) {
-        return getBit(this.value, lcdInterruptBitIndices[interruptType]);
-    }
-
-    public setInterruptEnabled(interruptType: LcdInterruptType) {
-        this.value = setBit(
-            this.value,
-            LcdStatusBit.LycInterrupt,
-            lcdInterruptBitIndices[interruptType],
-        );
+        return getBit(this.value, lcdInterruptBitIndices[interruptType]) === 1;
     }
 }
 
@@ -161,7 +153,9 @@ export class Ppu {
     public lyc = 0;
     public scrollY = 0;
     public scrollX = 0;
-    public palette = 0;
+    public bgPalette = 0xfc;
+    public objPalette1 = 0xff;
+    public objPalette2 = 0xff;
 
     onVBlank?: () => void;
     onStatInterrupt?: () => void;
@@ -200,11 +194,12 @@ export class Ppu {
 
     private set ly(value: number) {
         this._ly = value;
-
         this.stat.lycEqualsLy = this.ly === this.lyc ? 1 : 0;
 
-        if (this.stat.isInterruptEnabled(LcdInterruptType.Lyc)) {
-            this.onStatInterrupt?.();
+        if (this.stat.lycEqualsLy) {
+            if (this.stat.isInterruptEnabled(LcdInterruptType.Lyc)) {
+                this.onStatInterrupt?.();
+            }
         }
     }
 
@@ -316,7 +311,7 @@ export class Ppu {
             const colorBit1 = (byte2 >> bitIndex) & 1;
             const colorId = (colorBit1 << 1) | colorBit0;
 
-            const color = (this.palette >> (colorId * 2)) & 0x03;
+            const color = (this.bgPalette >> (colorId * 2)) & 0x03;
 
             const index = (this.ly * 160 + x) * 4;
 

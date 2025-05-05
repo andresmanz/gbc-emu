@@ -42,7 +42,9 @@ export const SCX_ADDRESS = 0xff43;
 export const LY_ADDRESS = 0xff44;
 export const LYC_ADDRESS = 0xff45;
 export const DMA_START_ADDRESS = 0xff46;
-export const PALETTE_ADDRESS = 0xff47;
+export const BG_PALETTE_ADDRESS = 0xff47;
+export const OBJ_PALETTE_1_ADDRESS = 0xff48;
+export const OBJ_PALETTE_2_ADDRESS = 0xff49;
 
 /**
  * For now, this is a non-CGB memory bus implementation.
@@ -55,7 +57,6 @@ export class GbMemoryBus implements MemoryBus {
     private ieValue = 0;
     private ifValue = 0;
     public serialLog = '';
-    public onDmaStart?: (value: number) => void;
 
     // placeholder memory
     private joypadInput = 0;
@@ -253,10 +254,26 @@ export class GbMemoryBus implements MemoryBus {
         });
 
         this.functionMap.mapSingleAddress({
-            address: PALETTE_ADDRESS,
-            read: () => this.ppu.palette,
+            address: BG_PALETTE_ADDRESS,
+            read: () => this.ppu.bgPalette,
             write: value => {
-                this.ppu.palette = value;
+                this.ppu.bgPalette = value;
+            },
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: OBJ_PALETTE_1_ADDRESS,
+            read: () => this.ppu.objPalette1,
+            write: value => {
+                this.ppu.objPalette1 = value;
+            },
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: OBJ_PALETTE_2_ADDRESS,
+            read: () => this.ppu.objPalette2,
+            write: value => {
+                this.ppu.objPalette2 = value;
             },
         });
 

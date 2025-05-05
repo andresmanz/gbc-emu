@@ -2,6 +2,7 @@ import { Cartridge } from './cartridge';
 import { Cpu } from './cpu/cpu';
 import { Interrupt, InterruptController } from './interrupts';
 import {
+    BG_PALETTE_ADDRESS,
     DIV_ADDRESS,
     GbMemoryBus,
     IF_REGISTER_ADDRESS,
@@ -45,8 +46,6 @@ export class Emulator {
             this.interruptController,
             this.logger,
         );
-
-        this.memoryBus.onDmaStart = value => this.dma.startTransfer(value);
 
         this.timer.onTimaOverflow = () =>
             this.interruptController.requestInterrupt(Interrupt.Timer);
@@ -98,7 +97,7 @@ export class Emulator {
         this.memoryBus.write(LY_ADDRESS, 0x00);
         this.memoryBus.write(0xff45, 0x00);
         this.memoryBus.write(0xff46, 0xff);
-        this.memoryBus.write(0xff47, 0xfc);
+        this.memoryBus.write(BG_PALETTE_ADDRESS, 0xfc);
         this.memoryBus.write(0xff4a, 0x00);
         this.memoryBus.write(0xff4b, 0x00);
         this.memoryBus.write(0xffff, 0x00);
