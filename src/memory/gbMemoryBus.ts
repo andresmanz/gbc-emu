@@ -45,6 +45,8 @@ export const DMA_START_ADDRESS = 0xff46;
 export const BG_PALETTE_ADDRESS = 0xff47;
 export const OBJ_PALETTE_1_ADDRESS = 0xff48;
 export const OBJ_PALETTE_2_ADDRESS = 0xff49;
+export const WY_ADDRESS = 0xff4a;
+export const WX_ADDRESS = 0xff4b;
 
 /**
  * For now, this is a non-CGB memory bus implementation.
@@ -290,6 +292,22 @@ export class GbMemoryBus implements MemoryBus {
             read: () => 0,
             write: () => {
                 //console.log('serial log: ' + this.serialLog);
+            },
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: WY_ADDRESS,
+            read: () => this.ppu.windowY,
+            write: value => {
+                this.ppu.windowY = value;
+            },
+        });
+
+        this.functionMap.mapSingleAddress({
+            address: WX_ADDRESS,
+            read: () => this.ppu.windowX,
+            write: value => {
+                this.ppu.windowX = value;
             },
         });
 

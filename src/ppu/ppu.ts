@@ -1,4 +1,5 @@
 import { getBit, setBit } from '../byteUtil';
+import { Word16 } from '../cpu/word16';
 import { Ram } from '../memory/ram';
 import { Oam } from './oam';
 
@@ -137,14 +138,49 @@ class LcdStatus {
 }
 
 const OAM_SCAN_LINE_TICKS = 80;
-const PIXEL_TRANSFER_LINE_TICKS = 172;
 const TICKS_PER_LINE = 456;
 const LINES_PER_FRAME = 154;
 const RESOLUTION_HEIGHT = 144;
 const RESOLUTION_WIDTH = 160;
 
+interface PixelFifoEntry {
+    colorIndex: number;
+    palette: number;
+    bgPriority: number;
+}
+
+enum FetcherState {
+    GetTile,
+    GetTileDataLow,
+    GetTileDataHigh,
+    Sleep,
+    Push,
+}
+
+class FetcherData {
+    public tileAddress = 0;
+    public tileData = new Word16();
+    public lineX = 0;
+    public currentFetchX = 0;
+    public state = FetcherState.GetTile;
+    public readonly bgPixelFifo = new Array<PixelFifoEntry>();
+    public pushedPixels = 0;
+
+    public reset() {
+        this.tileAddress = 0;
+        this.tileData.value = 0;
+        this.lineX = 0;
+        this.currentFetchX = 0;
+        this.state = FetcherState.GetTile;
+        this.bgPixelFifo.splice(0);
+        this.pushedPixels = 0;
+    }
+}
+
 export class Ppu {
-    public readonly framebuffer = new Uint8ClampedArray(160 * 144 * 4);
+    public readonly framebuffer = new Uint8ClampedArray(
+        RESOLUTION_WIDTH * RESOLUTION_HEIGHT * 4, // * 4 for RGBA
+    );
     public readonly oam = new Oam();
     private lineTicks = 0;
     public readonly lcdControl = new LcdControl();
@@ -153,9 +189,12 @@ export class Ppu {
     public lyc = 0;
     public scrollY = 0;
     public scrollX = 0;
+    public windowY = 0;
+    public windowX = 0;
     public bgPalette = 0xfc;
     public objPalette1 = 0xff;
     public objPalette2 = 0xff;
+    private fetcherData = new FetcherData();
 
     onVBlank?: () => void;
     onStatInterrupt?: () => void;
@@ -205,13 +244,15 @@ export class Ppu {
 
     private tickOam() {
         if (this.lineTicks >= OAM_SCAN_LINE_TICKS) {
+            this.fetcherData.reset();
             this.stat.ppuMode = PpuMode.PixelTransfer;
         }
     }
 
     private tickTransfer() {
-        if (this.lineTicks >= OAM_SCAN_LINE_TICKS + PIXEL_TRANSFER_LINE_TICKS) {
-            this.renderScanline();
+        this.tickFetcher();
+
+        if (this.fetcherData.pushedPixels >= RESOLUTION_WIDTH) {
             this.stat.ppuMode = PpuMode.HBlank;
 
             if (this.stat.isInterruptEnabled(LcdInterruptType.HBlank)) {
@@ -270,69 +311,160 @@ export class Ppu {
         this.lcdControl.isLcdAndPpuEnabled = 0;
     }
 
-    private renderScanline() {
-        if (!this.lcdControl.isBgAndWindowEnabled) {
-            return;
+    private tickFetcher() {
+        // each of these actions take 2 dots...
+        if (this.lineTicks % 2 === 1) {
+            this.processPixelFetching();
         }
 
-        const bgTileMapAddr = this.lcdControl.bgTileMap ? 0x1c00 : 0x1800;
-        const tileDataAddr = this.lcdControl.bgAndWindowTileMap
-            ? 0x0000
-            : 0x0800;
+        // ... and push is executed on each dot
+        this.pushPixelToFramebuffer();
+    }
 
-        for (let x = 0; x < RESOLUTION_WIDTH; x++) {
-            const pixelX = (x + this.scrollX) & 0xff;
-            const pixelY = (this.ly + this.scrollY) & 0xff;
+    private processPixelFetching() {
+        switch (this.fetcherData.state) {
+            case FetcherState.GetTile:
+                if (this.lcdControl.isBgAndWindowEnabled) {
+                    this.getTile();
+                }
 
-            const tileCol = Math.floor(pixelX / 8);
-            const tileRow = Math.floor(pixelY / 8);
+                this.fetcherData.currentFetchX += 8;
+                this.fetcherData.state = FetcherState.GetTileDataLow;
 
-            const tileMapIndex = tileRow * 32 + tileCol;
-            const tileIndex = this.videoRam.read(bgTileMapAddr + tileMapIndex);
+                break;
+            case FetcherState.GetTileDataLow:
+                this.fetcherData.tileData.low = this.videoRam.read(
+                    this.fetcherData.tileAddress,
+                );
+                this.fetcherData.state = FetcherState.GetTileDataHigh;
 
-            let tileAddress;
-            if (tileDataAddr === 0x0000) {
-                tileAddress = tileDataAddr + tileIndex * 16;
-            } else {
-                // signed index for 0x8800 region
-                const signedIndex = Int8Array.of(tileIndex)[0];
-                tileAddress = 0x1000 + signedIndex * 16;
-            }
+                break;
+            case FetcherState.GetTileDataHigh:
+                this.fetcherData.tileData.high = this.videoRam.read(
+                    this.fetcherData.tileAddress + 1,
+                );
+                this.fetcherData.state = FetcherState.Sleep;
 
-            const tileY = pixelY % 8;
-            const byte1 = this.videoRam.read(tileAddress + tileY * 2);
-            const byte2 = this.videoRam.read(tileAddress + tileY * 2 + 1);
+                break;
+            case FetcherState.Sleep:
+                this.fetcherData.state = FetcherState.Push;
 
-            const tileX = pixelX % 8;
-            const bitIndex = 7 - tileX;
-            const colorBit0 = (byte1 >> bitIndex) & 1;
-            const colorBit1 = (byte2 >> bitIndex) & 1;
-            const colorId = (colorBit1 << 1) | colorBit0;
+                break;
+            case FetcherState.Push:
+                if (this.pushPixelToFifo()) {
+                    this.fetcherData.state = FetcherState.GetTile;
+                }
 
-            const color = (this.bgPalette >> (colorId * 2)) & 0x03;
-
-            const index = (this.ly * 160 + x) * 4;
-
-            let shade = 0;
-            switch (color) {
-                case 0:
-                    shade = 255;
-                    break;
-                case 1:
-                    shade = 170;
-                    break;
-                case 2:
-                    shade = 85;
-                    break;
-                case 3:
-                    shade = 0;
-                    break;
-            }
-
-            this.framebuffer[index + 0] = shade; // r
-            this.framebuffer[index + 1] = shade; // g
-            this.framebuffer[index + 2] = shade; // b
-            this.framebuffer[index + 3] = 255; // a
+                break;
         }
+    }
+
+    private getTile() {
+        let tilemapAddress = 0x9800;
+
+        // WX is the window X + 7
+        /*
+        const isXInsideWindow =
+            this.fetcherData.currentFetchX >= this.windowX - 7;
+        const isPixelInsideWindow = false;
+        */
+        const isXInsideWindow = false;
+        const isPixelInsideWindow = false;
+
+        if (
+            (this.lcdControl.bgTileMap && !isXInsideWindow) ||
+            (this.lcdControl.windowTileMap && isXInsideWindow)
+        ) {
+            tilemapAddress = 0x9c00;
+        }
+
+        // TODO "If the current tile is a window tile, the X coordinate for the window tile is used"
+        const fetcherX = isPixelInsideWindow
+            ? this.windowX
+            : (Math.floor(this.scrollX / 8) +
+                  this.fetcherData.currentFetchX / 8) &
+              0x1f;
+
+        // TODO "If the current tile is a window tile, the Y coordinate for the window tile is used"
+        const fetcherY = isPixelInsideWindow
+            ? this.windowY
+            : (this.ly + this.scrollY) & 0xff;
+
+        const tileCol = Math.floor(fetcherX);
+        const tileRow = Math.floor(fetcherY / 8);
+
+        const localTileIndex = tileRow * 32 + tileCol;
+        const localTilemapAddress = tilemapAddress - 0x8000;
+
+        const tileIndex = this.videoRam.read(
+            localTilemapAddress + localTileIndex,
+        );
+
+        if (this.lcdControl.bgAndWindowTileMap === 1) {
+            this.fetcherData.tileAddress = 0x8000 + tileIndex * 16;
+        } else {
+            //const signedIndex = (tileIndex << 24) >> 24;
+            const signedIndex = Int8Array.of(tileIndex)[0];
+            this.fetcherData.tileAddress = 0x9000 + signedIndex * 16;
+        }
+
+        // TODO clean up the local/global address mess
+        this.fetcherData.tileAddress += 2 * (fetcherY % 8);
+        this.fetcherData.tileAddress -= 0x8000;
+    }
+
+    private pushPixelToFifo() {
+        if (this.fetcherData.bgPixelFifo.length > 8) {
+            // fifo is full
+            return false;
+        }
+
+        for (let i = 0; i < 8; ++i) {
+            const bitIndex = 7 - i;
+            const bit0 = (this.fetcherData.tileData.low >> bitIndex) & 1;
+            const bit1 = (this.fetcherData.tileData.high >> bitIndex) & 1;
+            const colorIndex = (bit1 << 1) | bit0;
+
+            this.fetcherData.bgPixelFifo.push({
+                colorIndex,
+                palette: 0,
+                bgPriority: 0,
+            });
+        }
+
+        return true;
+    }
+
+    private pushPixelToFramebuffer() {
+        if (this.fetcherData.bgPixelFifo.length > 8) {
+            const pixelData = this.fetcherData.bgPixelFifo.shift();
+
+            if (pixelData && this.fetcherData.lineX >= this.scrollX % 8) {
+                const color =
+                    (this.bgPalette >> (pixelData.colorIndex * 2)) & 0b11;
+
+                this.setFramebufferPixel(
+                    this.fetcherData.pushedPixels,
+                    this.ly,
+                    color,
+                );
+
+                ++this.fetcherData.pushedPixels;
+            }
+
+            ++this.fetcherData.lineX;
+        }
+    }
+
+    private setFramebufferPixel(x: number, y: number, color: number) {
+        const shades = [255, 170, 85, 0];
+        const shade = shades[color];
+
+        const fbPixelIndex = (y * RESOLUTION_WIDTH + x) * 4;
+
+        this.framebuffer[fbPixelIndex + 0] = shade; // r
+        this.framebuffer[fbPixelIndex + 1] = shade; // g
+        this.framebuffer[fbPixelIndex + 2] = shade; // b
+        this.framebuffer[fbPixelIndex + 3] = 255; // a
     }
 }
