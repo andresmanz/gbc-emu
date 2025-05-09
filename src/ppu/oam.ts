@@ -9,7 +9,7 @@ const BIT_INDEX_X_FLIP = 5;
 const BIT_INDEX_DMG_PALETTE = 4;
 const BIT_INDEX_BANK = 3;
 
-class OamEntry {
+export class OamEntry {
     public y = 0;
     public x = 0;
     public tileIndex = 0;

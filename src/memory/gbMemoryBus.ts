@@ -265,17 +265,17 @@ export class GbMemoryBus implements MemoryBus {
 
         this.functionMap.mapSingleAddress({
             address: OBJ_PALETTE_1_ADDRESS,
-            read: () => this.ppu.objPalette1,
+            read: () => this.ppu.objPalette0,
             write: value => {
-                this.ppu.objPalette1 = value;
+                this.ppu.objPalette0 = value;
             },
         });
 
         this.functionMap.mapSingleAddress({
             address: OBJ_PALETTE_2_ADDRESS,
-            read: () => this.ppu.objPalette2,
+            read: () => this.ppu.objPalette1,
             write: value => {
-                this.ppu.objPalette2 = value;
+                this.ppu.objPalette1 = value;
             },
         });
 

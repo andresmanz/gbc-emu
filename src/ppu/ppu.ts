@@ -1,7 +1,7 @@
 import { getBit, setBit } from '../byteUtil';
 import { Word16 } from '../cpu/word16';
 import { Ram } from '../memory/ram';
-import { Oam } from './oam';
+import { Oam, OamEntry } from './oam';
 
 enum LcdControlBit {
     BgAndWindowEnable,
@@ -142,6 +142,7 @@ const TICKS_PER_LINE = 456;
 const LINES_PER_FRAME = 154;
 const RESOLUTION_HEIGHT = 144;
 const RESOLUTION_WIDTH = 160;
+const OBJECT_WIDTH = 8;
 
 interface PixelFifoEntry {
     colorIndex: number;
@@ -164,7 +165,9 @@ class FetcherData {
     public currentFetchX = 0;
     public state = FetcherState.GetTile;
     public readonly bgPixelFifo = new Array<PixelFifoEntry>();
+    public readonly objPixelFifo = new Array<PixelFifoEntry>();
     public pushedPixels = 0;
+    public objectsOnScanline = new Array<OamEntry>();
 
     public reset() {
         this.tileAddress = 0;
@@ -173,7 +176,9 @@ class FetcherData {
         this.currentFetchX = 0;
         this.state = FetcherState.GetTile;
         this.bgPixelFifo.splice(0);
+        this.objPixelFifo.splice(0);
         this.pushedPixels = 0;
+        this.objectsOnScanline.splice(0);
     }
 }
 
@@ -192,8 +197,8 @@ export class Ppu {
     public windowY = 0;
     public windowX = 0;
     public bgPalette = 0xfc;
+    public objPalette0 = 0xff;
     public objPalette1 = 0xff;
-    public objPalette2 = 0xff;
     private fetcherData = new FetcherData();
 
     onVBlank?: () => void;
@@ -322,6 +327,12 @@ export class Ppu {
     }
 
     private processPixelFetching() {
+        if (this.fetcherData.state === FetcherState.GetTile) {
+            this.updateObjectsOnScanline();
+        }
+
+        this.fetchObjectPixel();
+
         switch (this.fetcherData.state) {
             case FetcherState.GetTile:
                 if (this.lcdControl.isBgAndWindowEnabled) {
@@ -356,6 +367,62 @@ export class Ppu {
                 }
 
                 break;
+        }
+    }
+
+    private fetchObjectPixel() {
+        const x = this.fetcherData.currentFetchX;
+
+        const objectsOnPosition = this.fetcherData.objectsOnScanline.filter(
+            obj => x >= obj.x && x <= obj.x + OBJECT_WIDTH,
+        );
+
+        if (objectsOnPosition.length > 0) {
+            for (const obj of objectsOnPosition) {
+                const localTileAddress = obj.tileIndex * 2;
+                const tileData = new Word16();
+                tileData.low = this.videoRam.read(localTileAddress);
+                tileData.high = this.videoRam.read(localTileAddress + 1);
+
+                const pixelIndex = (x - obj.x) % OBJECT_WIDTH;
+                const bitIndex = 7 - pixelIndex;
+                const bit0 = (this.fetcherData.tileData.low >> bitIndex) & 1;
+                const bit1 = (this.fetcherData.tileData.high >> bitIndex) & 1;
+                const colorIndex = (bit1 << 1) | bit0;
+
+                this.fetcherData.bgPixelFifo.push({
+                    colorIndex,
+                    palette: obj.dmgPalette,
+                    bgPriority: obj.priority,
+                });
+
+                // TODO replace pixel in FIFO instead
+                return;
+            }
+        } else if (this.fetcherData.objPixelFifo.length < 8) {
+            // push transparent pixel with lowest priority until we have at least 8 pixels
+            this.fetcherData.objPixelFifo.push({
+                colorIndex: 0,
+                bgPriority: 0,
+                palette: 0,
+            });
+        }
+    }
+
+    private updateObjectsOnScanline() {
+        const objHeight = this.lcdControl.objSize === 1 ? 16 : 8;
+        let counter = 0;
+
+        for (const obj of this.oam.entries) {
+            if (this.ly >= obj.y - objHeight && this.ly <= obj.y) {
+                this.fetcherData.objectsOnScanline.push(obj);
+                ++counter;
+            }
+
+            // max of 10 objects per scanline
+            if (counter >= 10) {
+                return;
+            }
         }
     }
 
@@ -437,11 +504,24 @@ export class Ppu {
 
     private pushPixelToFramebuffer() {
         if (this.fetcherData.bgPixelFifo.length > 8) {
-            const pixelData = this.fetcherData.bgPixelFifo.shift();
+            const bgPixelData = this.fetcherData.bgPixelFifo.shift();
+            const objPixelData = this.fetcherData.objPixelFifo.shift();
 
-            if (pixelData && this.fetcherData.lineX >= this.scrollX % 8) {
-                const color =
-                    (this.bgPalette >> (pixelData.colorIndex * 2)) & 0b11;
+            if (bgPixelData && this.fetcherData.lineX >= this.scrollX % 8) {
+                let colorIndex = bgPixelData.colorIndex;
+                let palette = this.bgPalette;
+                const isObjPixelVisible =
+                    objPixelData && objPixelData.colorIndex !== 0;
+
+                if (isObjPixelVisible) {
+                    colorIndex = objPixelData.colorIndex;
+                    palette =
+                        objPixelData.palette === 1
+                            ? this.objPalette1
+                            : this.objPalette0;
+                }
+
+                const color = (palette >> (colorIndex * 2)) & 0b11;
 
                 this.setFramebufferPixel(
                     this.fetcherData.pushedPixels,

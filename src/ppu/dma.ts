@@ -30,10 +30,10 @@ export class Dma {
         }
 
         // multiply the value with 0x100 to get the address
-        this.memoryBus?.write(
-            memoryLayout.oamStart + this.byte,
-            this.memoryBus?.read(this._value * 0x100 + this.byte),
-        );
+        if (this.memoryBus) {
+            const value = this.memoryBus.read(this._value * 0x100 + this.byte);
+            this.memoryBus?.write(memoryLayout.oamStart + this.byte, value);
+        }
 
         ++this.byte;
         this._isTransfering = this.byte <= 0x9f;
