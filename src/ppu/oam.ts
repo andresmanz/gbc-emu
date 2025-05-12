@@ -41,7 +41,7 @@ export class OamEntry {
 }
 
 export class Oam implements Memory {
-    public readonly entries = new Array<OamEntry>(40).fill(new OamEntry());
+    public readonly entries = Array.from({ length: 40 }, () => new OamEntry());
 
     read = (address: number) => {
         const { entryIndex, propertyName } =
