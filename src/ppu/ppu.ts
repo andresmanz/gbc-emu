@@ -414,9 +414,16 @@ export class Ppu {
         let counter = 0;
 
         for (const obj of this.oam.entries) {
-            if (this.ly >= obj.y - objHeight && this.ly <= obj.y) {
+            if (obj.x === 0) {
+                continue;
+            }
+
+            //if (this.ly >= obj.y - objHeight && this.ly <= obj.y) {
+            if (obj.y <= this.ly + 16 && obj.y + objHeight > this.ly + 16) {
                 this.fetcherData.objectsOnScanline.push(obj);
                 ++counter;
+
+                // TODO insert sorted by x position
             }
 
             // max of 10 objects per scanline
