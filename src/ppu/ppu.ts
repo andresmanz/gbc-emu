@@ -322,7 +322,8 @@ export class Ppu {
             this.processPixelFetching();
         }
 
-        // ... and push is executed on each dot
+        // ... and fetch object pixel and push on each dot
+        this.fetchObjectPixel(this.lineTicks);
         this.pushPixelToFramebuffer();
     }
 
@@ -330,8 +331,6 @@ export class Ppu {
         if (this.fetcherData.state === FetcherState.GetTile) {
             this.updateObjectsOnScanline();
         }
-
-        this.fetchObjectPixel();
 
         switch (this.fetcherData.state) {
             case FetcherState.GetTile:
@@ -370,27 +369,40 @@ export class Ppu {
         }
     }
 
-    private fetchObjectPixel() {
-        const x = this.fetcherData.currentFetchX;
-
+    private fetchObjectPixel(x: number) {
+        const objHeight = this.lcdControl.objSize === 1 ? 16 : 8;
         const objectsOnPosition = this.fetcherData.objectsOnScanline.filter(
-            obj => x >= obj.x && x <= obj.x + OBJECT_WIDTH,
+            obj => {
+                const objX = obj.x + (this.scrollX % 8);
+                return x >= objX - OBJECT_WIDTH && x <= objX;
+            },
         );
 
         if (objectsOnPosition.length > 0) {
             for (const obj of objectsOnPosition) {
-                const localTileAddress = obj.tileIndex * 2;
+                const objX = obj.x + (this.scrollX % 8);
+                const isInTopTile = this.ly % objHeight < 8;
+
+                const relativeTileIndex = isInTopTile
+                    ? obj.tileIndex & 0xfe
+                    : obj.tileIndex | 0x01;
+
+                const localY = this.ly + 16 - obj.y;
+                const xOffset = (x - (objX - OBJECT_WIDTH)) % OBJECT_WIDTH;
+                const yOffset = localY * 2; // 2 bytes per row
+
+                const localTileAddress = relativeTileIndex * 16 + yOffset;
+
                 const tileData = new Word16();
                 tileData.low = this.videoRam.read(localTileAddress);
                 tileData.high = this.videoRam.read(localTileAddress + 1);
 
-                const pixelIndex = (x - obj.x) % OBJECT_WIDTH;
-                const bitIndex = 7 - pixelIndex;
-                const bit0 = (this.fetcherData.tileData.low >> bitIndex) & 1;
-                const bit1 = (this.fetcherData.tileData.high >> bitIndex) & 1;
+                const bitIndex = 7 - xOffset;
+                const bit0 = (tileData.low >> bitIndex) & 1;
+                const bit1 = (tileData.high >> bitIndex) & 1;
                 const colorIndex = (bit1 << 1) | bit0;
 
-                this.fetcherData.bgPixelFifo.push({
+                this.fetcherData.objPixelFifo.push({
                     colorIndex,
                     palette: obj.dmgPalette,
                     bgPriority: obj.priority,
@@ -410,16 +422,17 @@ export class Ppu {
     }
 
     private updateObjectsOnScanline() {
+        this.fetcherData.objectsOnScanline.splice(0);
+
         const objHeight = this.lcdControl.objSize === 1 ? 16 : 8;
         let counter = 0;
 
         for (const obj of this.oam.entries) {
-            if (obj.x === 0) {
+            if (obj.y === 0) {
                 continue;
             }
 
-            //if (this.ly >= obj.y - objHeight && this.ly <= obj.y) {
-            if (obj.y <= this.ly + 16 && obj.y + objHeight > this.ly + 16) {
+            if (this.ly >= obj.y - 16 && this.ly <= obj.y) {
                 this.fetcherData.objectsOnScanline.push(obj);
                 ++counter;
 
@@ -477,8 +490,7 @@ export class Ppu {
         if (this.lcdControl.bgAndWindowTileMap === 1) {
             this.fetcherData.tileAddress = 0x8000 + tileIndex * 16;
         } else {
-            //const signedIndex = (tileIndex << 24) >> 24;
-            const signedIndex = Int8Array.of(tileIndex)[0];
+            const signedIndex = (tileIndex << 24) >> 24;
             this.fetcherData.tileAddress = 0x9000 + signedIndex * 16;
         }
 
