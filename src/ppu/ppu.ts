@@ -45,6 +45,11 @@ export enum PpuMode {
     PixelTransfer = 3,
 }
 
+enum ObjectSizeMode {
+    Small = 0,
+    Large = 1,
+}
+
 class LcdControl {
     public value = 0;
 
@@ -88,11 +93,11 @@ class LcdControl {
         setBit(this.value, LcdControlBit.BgTileMap, value);
     }
 
-    public get objSize() {
+    public get objSizeMode() {
         return getBit(this.value, LcdControlBit.ObjSize);
     }
 
-    public set objSize(value: number) {
+    public set objSizeMode(value: number) {
         setBit(this.value, LcdControlBit.ObjSize, value);
     }
 
@@ -143,6 +148,7 @@ const LINES_PER_FRAME = 154;
 const RESOLUTION_HEIGHT = 144;
 const RESOLUTION_WIDTH = 160;
 const OBJECT_WIDTH = 8;
+const FULL_OBJECT_HEIGHT = 16;
 
 interface PixelFifoEntry {
     colorIndex: number;
@@ -162,7 +168,9 @@ class FetcherData {
     public tileAddress = 0;
     public tileData = new Word16();
     public lineX = 0;
+    public mapX = 0;
     public currentFetchX = 0;
+    public objectFetchX = 0;
     public state = FetcherState.GetTile;
     public readonly bgPixelFifo = new Array<PixelFifoEntry>();
     public readonly objPixelFifo = new Array<PixelFifoEntry>();
@@ -173,7 +181,9 @@ class FetcherData {
         this.tileAddress = 0;
         this.tileData.value = 0;
         this.lineX = 0;
+        this.mapX = 0;
         this.currentFetchX = 0;
+        this.objectFetchX = 0;
         this.state = FetcherState.GetTile;
         this.bgPixelFifo.splice(0);
         this.objPixelFifo.splice(0);
@@ -218,7 +228,7 @@ export class Ppu {
 
         switch (this.stat.ppuMode) {
             case PpuMode.OamScan:
-                this.tickOam();
+                this.tickOamScan();
                 break;
             case PpuMode.PixelTransfer:
                 this.tickTransfer();
@@ -247,9 +257,10 @@ export class Ppu {
         }
     }
 
-    private tickOam() {
+    private tickOamScan() {
         if (this.lineTicks >= OAM_SCAN_LINE_TICKS) {
             this.fetcherData.reset();
+            this.updateObjectsOnScanline();
             this.stat.ppuMode = PpuMode.PixelTransfer;
         }
     }
@@ -317,24 +328,25 @@ export class Ppu {
     }
 
     private tickFetcher() {
+        this.fetcherData.mapX = this.fetcherData.currentFetchX + this.scrollX;
+
         // each of these actions take 2 dots...
         if (this.lineTicks % 2 === 1) {
             this.processPixelFetching();
         }
 
-        // ... and push is executed on each dot
+        // ... and fetch object pixel and push on each dot
+        this.fetchObjectPixel(this.fetcherData.objectFetchX);
         this.pushPixelToFramebuffer();
+
+        ++this.fetcherData.objectFetchX;
     }
 
     private processPixelFetching() {
-        if (this.fetcherData.state === FetcherState.GetTile) {
-            this.updateObjectsOnScanline();
-        }
-
-        this.fetchObjectPixel();
-
         switch (this.fetcherData.state) {
             case FetcherState.GetTile:
+                // TODO this is where scroll should be read
+
                 if (this.lcdControl.isBgAndWindowEnabled) {
                     this.getTile();
                 }
@@ -370,67 +382,110 @@ export class Ppu {
         }
     }
 
-    private fetchObjectPixel() {
-        const x = this.fetcherData.currentFetchX;
+    private fetchObjectPixel(x: number) {
+        const objHeight =
+            this.lcdControl.objSizeMode === ObjectSizeMode.Large ? 16 : 8;
 
         const objectsOnPosition = this.fetcherData.objectsOnScanline.filter(
-            obj => x >= obj.x && x <= obj.x + OBJECT_WIDTH,
+            obj => {
+                const objX = obj.x - OBJECT_WIDTH + (this.scrollX % 8);
+                return x >= objX && x < objX + OBJECT_WIDTH;
+            },
         );
+
+        let renderedObject: OamEntry | null = null;
 
         if (objectsOnPosition.length > 0) {
             for (const obj of objectsOnPosition) {
-                const localTileAddress = obj.tileIndex * 2;
+                const objX = obj.x - OBJECT_WIDTH + (this.scrollX % 8);
+                let localY = this.ly + FULL_OBJECT_HEIGHT - obj.y;
+                let localX = (x - objX) % OBJECT_WIDTH;
+
+                if (obj.yFlip) {
+                    localY = objHeight - localY - 1;
+                }
+
+                let relativeTileIndex = obj.tileIndex;
+
+                if (this.lcdControl.objSizeMode === ObjectSizeMode.Large) {
+                    const isInTopTile = localY < 8;
+
+                    // TODO is this necessary or can we just add 1 if it's the bottom tile?
+                    if (isInTopTile) {
+                        relativeTileIndex = obj.tileIndex & 0xfe;
+                    } else {
+                        localY -= 8;
+                        relativeTileIndex = obj.tileIndex | 0x01;
+                    }
+                }
+
+                if (obj.xFlip) {
+                    localX = 8 - localX - 1;
+                }
+
+                const xOffset = localX;
+                const yOffset = localY * 2; // 2 bytes per row
+
+                const localTileAddress = relativeTileIndex * 16 + yOffset;
+
                 const tileData = new Word16();
                 tileData.low = this.videoRam.read(localTileAddress);
                 tileData.high = this.videoRam.read(localTileAddress + 1);
 
-                const pixelIndex = (x - obj.x) % OBJECT_WIDTH;
-                const bitIndex = 7 - pixelIndex;
-                const bit0 = (this.fetcherData.tileData.low >> bitIndex) & 1;
-                const bit1 = (this.fetcherData.tileData.high >> bitIndex) & 1;
+                const bitIndex = 7 - xOffset;
+                const bit0 = (tileData.low >> bitIndex) & 1;
+                const bit1 = (tileData.high >> bitIndex) & 1;
                 const colorIndex = (bit1 << 1) | bit0;
 
-                this.fetcherData.bgPixelFifo.push({
+                const newPixelData = {
                     colorIndex,
                     palette: obj.dmgPalette,
                     bgPriority: obj.priority,
-                });
+                };
 
-                // TODO replace pixel in FIFO instead
-                return;
+                if (!renderedObject) {
+                    this.fetcherData.objPixelFifo.push(newPixelData);
+                    renderedObject = obj;
+                } else {
+                    if (obj.x < renderedObject.x) {
+                        this.fetcherData.objPixelFifo[
+                            this.fetcherData.objPixelFifo.length - 1
+                        ] = newPixelData;
+
+                        renderedObject = obj;
+                    }
+                }
             }
-        } else if (this.fetcherData.objPixelFifo.length < 8) {
-            // push transparent pixel with lowest priority until we have at least 8 pixels
+        } else {
             this.fetcherData.objPixelFifo.push({
                 colorIndex: 0,
-                bgPriority: 0,
                 palette: 0,
+                bgPriority: 1,
             });
         }
     }
 
     private updateObjectsOnScanline() {
-        const objHeight = this.lcdControl.objSize === 1 ? 16 : 8;
-        let counter = 0;
+        this.fetcherData.objectsOnScanline.splice(0);
 
         for (const obj of this.oam.entries) {
-            if (obj.x === 0) {
-                continue;
-            }
-
-            //if (this.ly >= obj.y - objHeight && this.ly <= obj.y) {
-            if (obj.y <= this.ly + 16 && obj.y + objHeight > this.ly + 16) {
+            if (
+                obj.x !== 0 &&
+                this.ly + FULL_OBJECT_HEIGHT >= obj.y &&
+                this.ly + FULL_OBJECT_HEIGHT < obj.y + this.objectHeight
+            ) {
                 this.fetcherData.objectsOnScanline.push(obj);
-                ++counter;
-
-                // TODO insert sorted by x position
             }
 
             // max of 10 objects per scanline
-            if (counter >= 10) {
+            if (this.fetcherData.objectsOnScanline.length >= 10) {
                 return;
             }
         }
+    }
+
+    private get objectHeight() {
+        return this.lcdControl.objSizeMode === ObjectSizeMode.Large ? 16 : 8;
     }
 
     private getTile() {
@@ -453,11 +508,14 @@ export class Ppu {
         }
 
         // TODO "If the current tile is a window tile, the X coordinate for the window tile is used"
+        /*
         const fetcherX = isPixelInsideWindow
             ? this.windowX
             : (Math.floor(this.scrollX / 8) +
                   this.fetcherData.currentFetchX / 8) &
               0x1f;
+              */
+        const fetcherX = Math.floor(this.fetcherData.mapX / 8) & 0x1f;
 
         // TODO "If the current tile is a window tile, the Y coordinate for the window tile is used"
         const fetcherY = isPixelInsideWindow
@@ -477,8 +535,7 @@ export class Ppu {
         if (this.lcdControl.bgAndWindowTileMap === 1) {
             this.fetcherData.tileAddress = 0x8000 + tileIndex * 16;
         } else {
-            //const signedIndex = (tileIndex << 24) >> 24;
-            const signedIndex = Int8Array.of(tileIndex)[0];
+            const signedIndex = (tileIndex << 24) >> 24;
             this.fetcherData.tileAddress = 0x9000 + signedIndex * 16;
         }
 
@@ -517,15 +574,20 @@ export class Ppu {
             if (bgPixelData && this.fetcherData.lineX >= this.scrollX % 8) {
                 let colorIndex = bgPixelData.colorIndex;
                 let palette = this.bgPalette;
-                const isObjPixelVisible =
-                    objPixelData && objPixelData.colorIndex !== 0;
 
-                if (isObjPixelVisible) {
-                    colorIndex = objPixelData.colorIndex;
-                    palette =
-                        objPixelData.palette === 1
-                            ? this.objPalette1
-                            : this.objPalette0;
+                if (objPixelData && this.lcdControl.isObjEnabled) {
+                    const objHasPriority =
+                        objPixelData.bgPriority === 0 || colorIndex === 0;
+                    const isObjPixelVisible =
+                        objPixelData.colorIndex !== 0 && objHasPriority;
+
+                    if (isObjPixelVisible) {
+                        colorIndex = objPixelData.colorIndex;
+                        palette =
+                            objPixelData.palette === 1
+                                ? this.objPalette1
+                                : this.objPalette0;
+                    }
                 }
 
                 const color = (palette >> (colorIndex * 2)) & 0b11;
