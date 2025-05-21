@@ -45,6 +45,11 @@ export enum PpuMode {
     PixelTransfer = 3,
 }
 
+enum ObjectSizeMode {
+    Small = 0,
+    Large = 1,
+}
+
 class LcdControl {
     public value = 0;
 
@@ -88,11 +93,11 @@ class LcdControl {
         setBit(this.value, LcdControlBit.BgTileMap, value);
     }
 
-    public get objSize() {
+    public get objSizeMode() {
         return getBit(this.value, LcdControlBit.ObjSize);
     }
 
-    public set objSize(value: number) {
+    public set objSizeMode(value: number) {
         setBit(this.value, LcdControlBit.ObjSize, value);
     }
 
@@ -143,6 +148,7 @@ const LINES_PER_FRAME = 154;
 const RESOLUTION_HEIGHT = 144;
 const RESOLUTION_WIDTH = 160;
 const OBJECT_WIDTH = 8;
+const FULL_OBJECT_HEIGHT = 16;
 
 interface PixelFifoEntry {
     colorIndex: number;
@@ -370,7 +376,9 @@ export class Ppu {
     }
 
     private fetchObjectPixel(x: number) {
-        const objHeight = this.lcdControl.objSize === 1 ? 16 : 8;
+        const objHeight =
+            this.lcdControl.objSizeMode === ObjectSizeMode.Large ? 16 : 8;
+
         const objectsOnPosition = this.fetcherData.objectsOnScanline.filter(
             obj => {
                 const objX = obj.x + (this.scrollX % 8);
@@ -381,14 +389,24 @@ export class Ppu {
         if (objectsOnPosition.length > 0) {
             for (const obj of objectsOnPosition) {
                 const objX = obj.x + (this.scrollX % 8);
-                const isInTopTile = this.ly % objHeight < 8;
-
-                const relativeTileIndex = isInTopTile
-                    ? obj.tileIndex & 0xfe
-                    : obj.tileIndex | 0x01;
-
                 const localY = this.ly + 16 - obj.y;
-                const xOffset = (x - (objX - OBJECT_WIDTH)) % OBJECT_WIDTH;
+                const localX = (x - (objX - OBJECT_WIDTH)) % OBJECT_WIDTH;
+
+                if (localY >= objHeight) {
+                    continue;
+                }
+
+                let relativeTileIndex = obj.tileIndex;
+
+                if (this.lcdControl.objSizeMode === ObjectSizeMode.Large) {
+                    const isInTopTile = localY < 8;
+
+                    relativeTileIndex = isInTopTile
+                        ? obj.tileIndex & 0xfe
+                        : obj.tileIndex | 0x01;
+                }
+
+                const xOffset = localX;
                 const yOffset = localY * 2; // 2 bytes per row
 
                 const localTileAddress = relativeTileIndex * 16 + yOffset;
@@ -424,23 +442,19 @@ export class Ppu {
     private updateObjectsOnScanline() {
         this.fetcherData.objectsOnScanline.splice(0);
 
-        const objHeight = this.lcdControl.objSize === 1 ? 16 : 8;
-        let counter = 0;
-
         for (const obj of this.oam.entries) {
             if (obj.y === 0) {
                 continue;
             }
 
-            if (this.ly >= obj.y - 16 && this.ly <= obj.y) {
+            if (this.ly >= obj.y - FULL_OBJECT_HEIGHT && this.ly <= obj.y) {
                 this.fetcherData.objectsOnScanline.push(obj);
-                ++counter;
 
                 // TODO insert sorted by x position
             }
 
             // max of 10 objects per scanline
-            if (counter >= 10) {
+            if (this.fetcherData.objectsOnScanline.length >= 10) {
                 return;
             }
         }
