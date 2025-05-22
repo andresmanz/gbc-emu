@@ -391,6 +391,8 @@ export class Ppu {
             },
         );
 
+        let renderedObject: OamEntry | null = null;
+
         if (objectsOnPosition.length > 0) {
             for (const obj of objectsOnPosition) {
                 const objX = obj.x - OBJECT_WIDTH + (this.scrollX % 8);
@@ -433,11 +435,24 @@ export class Ppu {
                 const bit1 = (tileData.high >> bitIndex) & 1;
                 const colorIndex = (bit1 << 1) | bit0;
 
-                this.fetcherData.objPixelFifo.push({
+                const newPixelData = {
                     colorIndex,
                     palette: obj.dmgPalette,
                     bgPriority: obj.priority,
-                });
+                };
+
+                if (renderedObject === null) {
+                    this.fetcherData.objPixelFifo.push(newPixelData);
+                    renderedObject = obj;
+                } else {
+                    if (obj.x < renderedObject.x) {
+                        this.fetcherData.objPixelFifo[
+                            this.fetcherData.objPixelFifo.length - 1
+                        ] = newPixelData;
+
+                        renderedObject = obj;
+                    }
+                }
 
                 // TODO replace pixel in FIFO instead
                 return;
