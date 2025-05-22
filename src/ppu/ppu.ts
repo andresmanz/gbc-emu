@@ -168,7 +168,9 @@ class FetcherData {
     public tileAddress = 0;
     public tileData = new Word16();
     public lineX = 0;
+    public mapX = 0;
     public currentFetchX = 0;
+    public objectFetchX = 0;
     public state = FetcherState.GetTile;
     public readonly bgPixelFifo = new Array<PixelFifoEntry>();
     public readonly objPixelFifo = new Array<PixelFifoEntry>();
@@ -179,7 +181,9 @@ class FetcherData {
         this.tileAddress = 0;
         this.tileData.value = 0;
         this.lineX = 0;
+        this.mapX = 0;
         this.currentFetchX = 0;
+        this.objectFetchX = 0;
         this.state = FetcherState.GetTile;
         this.bgPixelFifo.splice(0);
         this.objPixelFifo.splice(0);
@@ -224,7 +228,7 @@ export class Ppu {
 
         switch (this.stat.ppuMode) {
             case PpuMode.OamScan:
-                this.tickOam();
+                this.tickOamScan();
                 break;
             case PpuMode.PixelTransfer:
                 this.tickTransfer();
@@ -253,9 +257,10 @@ export class Ppu {
         }
     }
 
-    private tickOam() {
+    private tickOamScan() {
         if (this.lineTicks >= OAM_SCAN_LINE_TICKS) {
             this.fetcherData.reset();
+            this.updateObjectsOnScanline();
             this.stat.ppuMode = PpuMode.PixelTransfer;
         }
     }
@@ -323,21 +328,21 @@ export class Ppu {
     }
 
     private tickFetcher() {
+        this.fetcherData.mapX = this.fetcherData.currentFetchX + this.scrollX;
+
         // each of these actions take 2 dots...
         if (this.lineTicks % 2 === 1) {
             this.processPixelFetching();
         }
 
         // ... and fetch object pixel and push on each dot
-        this.fetchObjectPixel(this.lineTicks);
+        this.fetchObjectPixel(this.fetcherData.objectFetchX);
         this.pushPixelToFramebuffer();
+
+        ++this.fetcherData.objectFetchX;
     }
 
     private processPixelFetching() {
-        if (this.fetcherData.state === FetcherState.GetTile) {
-            this.updateObjectsOnScanline();
-        }
-
         switch (this.fetcherData.state) {
             case FetcherState.GetTile:
                 if (this.lcdControl.isBgAndWindowEnabled) {
@@ -381,19 +386,19 @@ export class Ppu {
 
         const objectsOnPosition = this.fetcherData.objectsOnScanline.filter(
             obj => {
-                const objX = obj.x + (this.scrollX % 8);
-                return x >= objX - OBJECT_WIDTH && x <= objX;
+                const objX = obj.x - OBJECT_WIDTH + (this.scrollX % 8);
+                return x >= objX && x < objX + OBJECT_WIDTH;
             },
         );
 
         if (objectsOnPosition.length > 0) {
             for (const obj of objectsOnPosition) {
-                const objX = obj.x + (this.scrollX % 8);
-                const localY = this.ly + 16 - obj.y;
-                const localX = (x - (objX - OBJECT_WIDTH)) % OBJECT_WIDTH;
+                const objX = obj.x - OBJECT_WIDTH + (this.scrollX % 8);
+                let localY = this.ly + FULL_OBJECT_HEIGHT - obj.y;
+                let localX = (x - objX) % OBJECT_WIDTH;
 
-                if (localY >= objHeight) {
-                    continue;
+                if (obj.yFlip) {
+                    localY = objHeight - localY - 1;
                 }
 
                 let relativeTileIndex = obj.tileIndex;
@@ -401,9 +406,17 @@ export class Ppu {
                 if (this.lcdControl.objSizeMode === ObjectSizeMode.Large) {
                     const isInTopTile = localY < 8;
 
-                    relativeTileIndex = isInTopTile
-                        ? obj.tileIndex & 0xfe
-                        : obj.tileIndex | 0x01;
+                    // TODO is this necessary or can we just add 1 if it's the bottom tile?
+                    if (isInTopTile) {
+                        relativeTileIndex = obj.tileIndex & 0xfe;
+                    } else {
+                        localY -= 8;
+                        relativeTileIndex = obj.tileIndex | 0x01;
+                    }
+                }
+
+                if (obj.xFlip) {
+                    localX = 8 - localX - 1;
                 }
 
                 const xOffset = localX;
@@ -429,12 +442,11 @@ export class Ppu {
                 // TODO replace pixel in FIFO instead
                 return;
             }
-        } else if (this.fetcherData.objPixelFifo.length < 8) {
-            // push transparent pixel with lowest priority until we have at least 8 pixels
+        } else {
             this.fetcherData.objPixelFifo.push({
                 colorIndex: 0,
-                bgPriority: 0,
                 palette: 0,
+                bgPriority: 1,
             });
         }
     }
@@ -443,14 +455,12 @@ export class Ppu {
         this.fetcherData.objectsOnScanline.splice(0);
 
         for (const obj of this.oam.entries) {
-            if (obj.y === 0) {
-                continue;
-            }
-
-            if (this.ly >= obj.y - FULL_OBJECT_HEIGHT && this.ly <= obj.y) {
+            if (
+                obj.x !== 0 &&
+                this.ly + FULL_OBJECT_HEIGHT >= obj.y &&
+                this.ly + FULL_OBJECT_HEIGHT < obj.y + this.objectHeight
+            ) {
                 this.fetcherData.objectsOnScanline.push(obj);
-
-                // TODO insert sorted by x position
             }
 
             // max of 10 objects per scanline
@@ -458,6 +468,10 @@ export class Ppu {
                 return;
             }
         }
+    }
+
+    private get objectHeight() {
+        return this.lcdControl.objSizeMode === ObjectSizeMode.Large ? 16 : 8;
     }
 
     private getTile() {
@@ -480,11 +494,14 @@ export class Ppu {
         }
 
         // TODO "If the current tile is a window tile, the X coordinate for the window tile is used"
+        /*
         const fetcherX = isPixelInsideWindow
             ? this.windowX
             : (Math.floor(this.scrollX / 8) +
                   this.fetcherData.currentFetchX / 8) &
               0x1f;
+              */
+        const fetcherX = Math.floor(this.fetcherData.mapX / 8) & 0x1f;
 
         // TODO "If the current tile is a window tile, the Y coordinate for the window tile is used"
         const fetcherY = isPixelInsideWindow
@@ -543,15 +560,20 @@ export class Ppu {
             if (bgPixelData && this.fetcherData.lineX >= this.scrollX % 8) {
                 let colorIndex = bgPixelData.colorIndex;
                 let palette = this.bgPalette;
-                const isObjPixelVisible =
-                    objPixelData && objPixelData.colorIndex !== 0;
 
-                if (isObjPixelVisible) {
-                    colorIndex = objPixelData.colorIndex;
-                    palette =
-                        objPixelData.palette === 1
-                            ? this.objPalette1
-                            : this.objPalette0;
+                if (objPixelData && this.lcdControl.isObjEnabled) {
+                    const objHasPriority =
+                        objPixelData.bgPriority === 0 || colorIndex === 0;
+                    const isObjPixelVisible =
+                        objPixelData.colorIndex !== 0 && objHasPriority;
+
+                    if (isObjPixelVisible) {
+                        colorIndex = objPixelData.colorIndex;
+                        palette =
+                            objPixelData.palette === 1
+                                ? this.objPalette1
+                                : this.objPalette0;
+                    }
                 }
 
                 const color = (palette >> (colorIndex * 2)) & 0b11;
