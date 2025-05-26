@@ -169,6 +169,7 @@ class FetcherData {
     public tileData = new Word16();
     public lineX = 0;
     public mapX = 0;
+    public mapY = 0;
     public currentFetchX = 0;
     public objectFetchX = 0;
     public state = FetcherState.GetTile;
@@ -182,6 +183,7 @@ class FetcherData {
         this.tileData.value = 0;
         this.lineX = 0;
         this.mapX = 0;
+        this.mapY = 0;
         this.currentFetchX = 0;
         this.objectFetchX = 0;
         this.state = FetcherState.GetTile;
@@ -313,6 +315,7 @@ export class Ppu {
 
     private reset() {
         this.stat.ppuMode = PpuMode.OamScan;
+        this.lcdControl.value = 0x91;
         this.lineTicks = 0;
         this.framebuffer.fill(0);
     }
@@ -329,6 +332,7 @@ export class Ppu {
 
     private tickFetcher() {
         this.fetcherData.mapX = this.fetcherData.currentFetchX + this.scrollX;
+        this.fetcherData.mapY = this.ly + this.scrollY;
 
         // each of these actions take 2 dots...
         if (this.lineTicks % 2 === 1) {
@@ -520,7 +524,7 @@ export class Ppu {
         // TODO "If the current tile is a window tile, the Y coordinate for the window tile is used"
         const fetcherY = isPixelInsideWindow
             ? this.windowY
-            : (this.ly + this.scrollY) & 0xff;
+            : this.fetcherData.mapY & 0xff;
 
         const tileCol = Math.floor(fetcherX);
         const tileRow = Math.floor(fetcherY / 8);
@@ -574,6 +578,10 @@ export class Ppu {
             if (bgPixelData && this.fetcherData.lineX >= this.scrollX % 8) {
                 let colorIndex = bgPixelData.colorIndex;
                 let palette = this.bgPalette;
+
+                if (!this.lcdControl.isBgAndWindowEnabled) {
+                    colorIndex = 0;
+                }
 
                 if (objPixelData && this.lcdControl.isObjEnabled) {
                     const objHasPriority =

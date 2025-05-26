@@ -29,10 +29,7 @@ export class InterruptController {
     constructor(private memoryBus: MemoryBus) {}
 
     requestInterrupt(interrupt: Interrupt) {
-        const ieValue = this.memoryBus.read(IE_REGISTER_ADDRESS);
         const ifValue = this.memoryBus.read(IF_REGISTER_ADDRESS);
-
-        this.memoryBus.write(IE_REGISTER_ADDRESS, ieValue | (1 << interrupt));
         this.memoryBus.write(IF_REGISTER_ADDRESS, ifValue | (1 << interrupt));
     }
 

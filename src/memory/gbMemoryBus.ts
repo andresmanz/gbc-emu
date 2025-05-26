@@ -204,7 +204,9 @@ export class GbMemoryBus implements MemoryBus {
         this.functionMap.mapSingleAddress({
             address: LCD_CONTROL_ADDRESS,
             read: () => this.ppu.lcdControl.value,
-            write: value => (this.ppu.lcdControl.value = value),
+            write: value => {
+                this.ppu.lcdControl.value = value;
+            },
         });
 
         this.functionMap.mapSingleAddress({
