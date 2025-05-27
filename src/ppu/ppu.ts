@@ -350,8 +350,8 @@ export class Ppu {
         // update if is rendering window
         if (this.lcdControl.isWindowEnabled && this.ly >= this.windowY) {
             if (this.fetcherData.objectFetchX === this.windowX - 7) {
-                // window rendering is starting, so clear FIFO
-                this.fetcherData.bgPixelFifo.splice(0);
+                // TODO window rendering is starting, so clear FIFO
+                //this.fetcherData.bgPixelFifo.splice(0);
             }
 
             // Window X is the window x position + 7
@@ -409,7 +409,7 @@ export class Ppu {
 
                 break;
             case FetcherState.Push:
-                if (this.pushPixelToFifo()) {
+                if (this.pushTileToFifo()) {
                     this.fetcherData.state = FetcherState.GetTile;
                 }
 
@@ -536,7 +536,7 @@ export class Ppu {
         // TODO "If the current tile is a window tile, the X coordinate for the window tile is used"
         const fetcherX = this.isRenderingWindow
             ? Math.floor(
-                  (this.fetcherData.currentFetchX - this.windowX - 7) / 8,
+                  (this.fetcherData.currentFetchX + 7 - this.windowX) / 8,
               )
             : Math.floor(this.fetcherData.mapX / 8) & 0x1f;
 
@@ -567,7 +567,7 @@ export class Ppu {
         this.fetcherData.tileAddress -= 0x8000;
     }
 
-    private pushPixelToFifo() {
+    private pushTileToFifo() {
         if (this.fetcherData.bgPixelFifo.length > 8) {
             // fifo is full
             return false;
