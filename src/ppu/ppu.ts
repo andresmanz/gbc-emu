@@ -212,6 +212,10 @@ export class Ppu {
     public objPalette0 = 0xff;
     public objPalette1 = 0xff;
     private fetcherData = new FetcherData();
+    private isWindowYConditionMet = false;
+    private windowLine = 0;
+    private isRenderingWindow = false;
+    private wasWindowRenderedOnThisLine = false;
 
     onVBlank?: () => void;
     onStatInterrupt?: () => void;
@@ -262,6 +266,7 @@ export class Ppu {
     private tickOamScan() {
         if (this.lineTicks >= OAM_SCAN_LINE_TICKS) {
             this.fetcherData.reset();
+            this.isWindowYConditionMet ||= this.windowY === this.ly;
             this.updateObjectsOnScanline();
             this.stat.ppuMode = PpuMode.PixelTransfer;
         }
@@ -297,6 +302,12 @@ export class Ppu {
             }
 
             this.lineTicks = 0;
+
+            if (this.wasWindowRenderedOnThisLine) {
+                this.windowLine++;
+            }
+
+            this.wasWindowRenderedOnThisLine = false;
         }
     }
 
@@ -306,6 +317,8 @@ export class Ppu {
 
             if (this.ly >= LINES_PER_FRAME) {
                 this.ly = 0;
+                this.windowLine = 0;
+                this.isWindowYConditionMet = false;
                 this.stat.ppuMode = PpuMode.OamScan;
             }
 
@@ -334,6 +347,24 @@ export class Ppu {
         this.fetcherData.mapX = this.fetcherData.currentFetchX + this.scrollX;
         this.fetcherData.mapY = this.ly + this.scrollY;
 
+        // update if is rendering window
+        if (this.lcdControl.isWindowEnabled && this.ly >= this.windowY) {
+            if (this.fetcherData.objectFetchX === this.windowX - 7) {
+                // window rendering is starting, so clear FIFO
+                this.fetcherData.bgPixelFifo.splice(0);
+            }
+
+            // Window X is the window x position + 7
+            this.isRenderingWindow =
+                this.fetcherData.objectFetchX >= this.windowX - 7;
+
+            if (this.isRenderingWindow) {
+                this.wasWindowRenderedOnThisLine = true;
+            }
+        } else {
+            this.isRenderingWindow = false;
+        }
+
         // each of these actions take 2 dots...
         if (this.lineTicks % 2 === 1) {
             this.processPixelFetching();
@@ -352,7 +383,7 @@ export class Ppu {
                 // TODO this is where scroll should be read
 
                 if (this.lcdControl.isBgAndWindowEnabled) {
-                    this.getTile();
+                    this.getBgOrWindowTile();
                 }
 
                 this.fetcherData.currentFetchX += 8;
@@ -492,38 +523,26 @@ export class Ppu {
         return this.lcdControl.objSizeMode === ObjectSizeMode.Large ? 16 : 8;
     }
 
-    private getTile() {
+    private getBgOrWindowTile() {
         let tilemapAddress = 0x9800;
 
-        // WX is the window X + 7
-        /*
-        const isXInsideWindow =
-            this.fetcherData.currentFetchX >= this.windowX - 7;
-        const isPixelInsideWindow = false;
-        */
-        const isXInsideWindow = false;
-        const isPixelInsideWindow = false;
-
         if (
-            (this.lcdControl.bgTileMap && !isXInsideWindow) ||
-            (this.lcdControl.windowTileMap && isXInsideWindow)
+            (this.lcdControl.bgTileMap && !this.isRenderingWindow) ||
+            (this.lcdControl.windowTileMap && this.isRenderingWindow)
         ) {
             tilemapAddress = 0x9c00;
         }
 
         // TODO "If the current tile is a window tile, the X coordinate for the window tile is used"
-        /*
-        const fetcherX = isPixelInsideWindow
-            ? this.windowX
-            : (Math.floor(this.scrollX / 8) +
-                  this.fetcherData.currentFetchX / 8) &
-              0x1f;
-              */
-        const fetcherX = Math.floor(this.fetcherData.mapX / 8) & 0x1f;
+        const fetcherX = this.isRenderingWindow
+            ? Math.floor(
+                  (this.fetcherData.currentFetchX - this.windowX - 7) / 8,
+              )
+            : Math.floor(this.fetcherData.mapX / 8) & 0x1f;
 
         // TODO "If the current tile is a window tile, the Y coordinate for the window tile is used"
-        const fetcherY = isPixelInsideWindow
-            ? this.windowY
+        const fetcherY = this.isRenderingWindow
+            ? this.windowLine
             : this.fetcherData.mapY & 0xff;
 
         const tileCol = Math.floor(fetcherX);
