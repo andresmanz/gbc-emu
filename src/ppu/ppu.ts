@@ -171,7 +171,6 @@ class FetcherData {
     public mapX = 0;
     public mapY = 0;
     public currentFetchX = 0;
-    public objectFetchX = 0;
     public state = FetcherState.GetTile;
     public readonly bgPixelFifo = new Array<PixelFifoEntry>();
     public readonly objPixelFifo = new Array<PixelFifoEntry>();
@@ -185,7 +184,6 @@ class FetcherData {
         this.mapX = 0;
         this.mapY = 0;
         this.currentFetchX = 0;
-        this.objectFetchX = 0;
         this.state = FetcherState.GetTile;
         this.bgPixelFifo.splice(0);
         this.objPixelFifo.splice(0);
@@ -347,20 +345,24 @@ export class Ppu {
         this.fetcherData.mapX = this.fetcherData.currentFetchX + this.scrollX;
         this.fetcherData.mapY = this.ly + this.scrollY;
 
+        const isWindowVisible =
+            this.lcdControl.isWindowEnabled &&
+            this.windowX >= 0 &&
+            this.windowX <= 166 &&
+            this.windowY >= 0 &&
+            this.windowY < RESOLUTION_HEIGHT;
+
         // update if is rendering window
-        if (this.lcdControl.isWindowEnabled && this.ly >= this.windowY) {
-            if (this.fetcherData.objectFetchX === this.windowX - 7) {
+        if (isWindowVisible && this.ly >= this.windowY) {
+            // window X is the window x position + 7
+            if (this.fetcherData.lineX === this.windowX - 7) {
                 // TODO window rendering is starting, so clear FIFO
                 //this.fetcherData.bgPixelFifo.splice(0);
-            }
-
-            // Window X is the window x position + 7
-            this.isRenderingWindow =
-                this.fetcherData.objectFetchX >= this.windowX - 7;
-
-            if (this.isRenderingWindow) {
+                //this.fetcherData.state = FetcherState.GetTile;
                 this.wasWindowRenderedOnThisLine = true;
             }
+
+            this.isRenderingWindow = this.fetcherData.lineX >= this.windowX - 7;
         } else {
             this.isRenderingWindow = false;
         }
@@ -370,11 +372,8 @@ export class Ppu {
             this.processPixelFetching();
         }
 
-        // ... and fetch object pixel and push on each dot
-        this.fetchObjectPixel(this.fetcherData.objectFetchX);
+        // ... and push on each dot
         this.pushPixelToFramebuffer();
-
-        ++this.fetcherData.objectFetchX;
     }
 
     private processPixelFetching() {
@@ -533,10 +532,14 @@ export class Ppu {
             tilemapAddress = 0x9c00;
         }
 
+        if (this.isRenderingWindow) {
+            //console.log(this.fetcherData.currentFetchX, this.fetcherData.lineX);
+        }
+
         // TODO "If the current tile is a window tile, the X coordinate for the window tile is used"
         const fetcherX = this.isRenderingWindow
             ? Math.floor(
-                  (this.fetcherData.currentFetchX + 7 - this.windowX) / 8,
+                  (this.fetcherData.currentFetchX - (this.windowX - 7)) / 8,
               )
             : Math.floor(this.fetcherData.mapX / 8) & 0x1f;
 
