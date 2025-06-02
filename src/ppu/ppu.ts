@@ -362,7 +362,7 @@ export class Ppu {
                 this.wasWindowRenderedOnThisLine = true;
             }
 
-            this.isRenderingWindow = this.fetcherData.lineX >= this.windowX - 7;
+            // this.isRenderingWindow = this.fetcherData.lineX >= this.windowX - 7;
         } else {
             this.isRenderingWindow = false;
         }
@@ -416,86 +416,84 @@ export class Ppu {
         }
     }
 
-    private fetchObjectPixel(x: number) {
+    private updateObjectFifo(x: number, fifoOffset: number) {
+        const fifo = this.fetcherData.objPixelFifo;
         const objHeight =
             this.lcdControl.objSizeMode === ObjectSizeMode.Large ? 16 : 8;
 
-        const objectsOnPosition = this.fetcherData.objectsOnScanline.filter(
-            obj => {
-                const objX = obj.x - OBJECT_WIDTH + (this.scrollX % 8);
-                return x >= objX && x < objX + OBJECT_WIDTH;
-            },
-        );
+        // first pad the fifo with transparent pixels so there are at least 8 pixels
+        /*
+        while (fifo.length < 16) {
+            fifo.push({
+                colorIndex: 0,
+                bgPriority: 1,
+                palette: 0,
+            });
+        }
+        */
 
-        let renderedObject: OamEntry | null = null;
+        const objects = this.fetcherData.objectsOnScanline;
 
-        if (objectsOnPosition.length > 0) {
-            for (const obj of objectsOnPosition) {
-                const objX = obj.x - OBJECT_WIDTH + (this.scrollX % 8);
-                let localY = this.ly + FULL_OBJECT_HEIGHT - obj.y;
-                let localX = (x - objX) % OBJECT_WIDTH;
+        // now check if there's a sprite at the current X. since
+        // sprites are sorted by x, it's enough to check and pop the first one
+        while (objects.length > 0 && objects[0].x - OBJECT_WIDTH === x) {
+            const obj = objects.shift();
 
-                if (obj.yFlip) {
-                    localY = objHeight - localY - 1;
-                }
+            if (!obj) {
+                return;
+            }
 
-                let relativeTileIndex = obj.tileIndex;
+            // fetch the pixel row
+            let localY = this.ly + FULL_OBJECT_HEIGHT - obj.y;
 
-                if (this.lcdControl.objSizeMode === ObjectSizeMode.Large) {
-                    const isInTopTile = localY < 8;
+            if (obj.yFlip) {
+                localY = objHeight - localY - 1;
+            }
 
-                    // TODO is this necessary or can we just add 1 if it's the bottom tile?
-                    if (isInTopTile) {
-                        relativeTileIndex = obj.tileIndex & 0xfe;
-                    } else {
-                        localY -= 8;
-                        relativeTileIndex = obj.tileIndex | 0x01;
-                    }
-                }
+            let relativeTileIndex = obj.tileIndex;
 
-                if (obj.xFlip) {
-                    localX = 8 - localX - 1;
-                }
+            if (this.lcdControl.objSizeMode === ObjectSizeMode.Large) {
+                const isInTopTile = localY < 8;
 
-                const xOffset = localX;
-                const yOffset = localY * 2; // 2 bytes per row
-
-                const localTileAddress = relativeTileIndex * 16 + yOffset;
-
-                const tileData = new Word16();
-                tileData.low = this.videoRam.read(localTileAddress);
-                tileData.high = this.videoRam.read(localTileAddress + 1);
-
-                const bitIndex = 7 - xOffset;
-                const bit0 = (tileData.low >> bitIndex) & 1;
-                const bit1 = (tileData.high >> bitIndex) & 1;
-                const colorIndex = (bit1 << 1) | bit0;
-
-                const newPixelData = {
-                    colorIndex,
-                    palette: obj.dmgPalette,
-                    bgPriority: obj.priority,
-                };
-
-                if (!renderedObject) {
-                    this.fetcherData.objPixelFifo.push(newPixelData);
-                    renderedObject = obj;
+                // TODO is this necessary or can we just add 1 if it's the bottom tile?
+                if (isInTopTile) {
+                    relativeTileIndex = obj.tileIndex & 0xfe;
                 } else {
-                    if (obj.x < renderedObject.x) {
-                        this.fetcherData.objPixelFifo[
-                            this.fetcherData.objPixelFifo.length - 1
-                        ] = newPixelData;
-
-                        renderedObject = obj;
-                    }
+                    localY -= 8;
+                    relativeTileIndex = obj.tileIndex | 0x01;
                 }
             }
-        } else {
-            this.fetcherData.objPixelFifo.push({
-                colorIndex: 0,
-                palette: 0,
-                bgPriority: 1,
-            });
+
+            const yOffset = localY * 2; // 2 bytes per row
+
+            const localTileAddress = relativeTileIndex * 16 + yOffset;
+
+            const tileData = new Word16();
+            tileData.low = this.videoRam.read(localTileAddress);
+            tileData.high = this.videoRam.read(localTileAddress + 1);
+
+            for (let i = 0; i < 8; ++i) {
+                const index = fifoOffset + i;
+
+                while (index >= fifo.length - 1) {
+                    fifo.push({
+                        colorIndex: 0,
+                        bgPriority: 1,
+                        palette: 0,
+                    });
+                }
+
+                if (fifo[index].colorIndex === 0) {
+                    const bitIndex = obj.xFlip ? i : 7 - i;
+                    const bit0 = (tileData.low >> bitIndex) & 1;
+                    const bit1 = (tileData.high >> bitIndex) & 1;
+                    const colorIndex = (bit1 << 1) | bit0;
+
+                    fifo[index].colorIndex = colorIndex;
+                    fifo[index].palette = obj.dmgPalette;
+                    fifo[index].bgPriority = obj.priority;
+                }
+            }
         }
     }
 
@@ -513,9 +511,12 @@ export class Ppu {
 
             // max of 10 objects per scanline
             if (this.fetcherData.objectsOnScanline.length >= 10) {
-                return;
+                break;
             }
         }
+
+        // now sort by x position (ascending)
+        this.fetcherData.objectsOnScanline.sort((a, b) => a.x - b.x);
     }
 
     private get objectHeight() {
@@ -530,10 +531,6 @@ export class Ppu {
             (this.lcdControl.windowTileMap && this.isRenderingWindow)
         ) {
             tilemapAddress = 0x9c00;
-        }
-
-        if (this.isRenderingWindow) {
-            //console.log(this.fetcherData.currentFetchX, this.fetcherData.lineX);
         }
 
         // TODO "If the current tile is a window tile, the X coordinate for the window tile is used"
@@ -587,6 +584,8 @@ export class Ppu {
                 palette: 0,
                 bgPriority: 0,
             });
+
+            this.updateObjectFifo(this.fetcherData.mapX + i, i);
         }
 
         return true;
