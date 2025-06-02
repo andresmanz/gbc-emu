@@ -170,7 +170,7 @@ class FetcherData {
     public lineX = 0;
     public mapX = 0;
     public mapY = 0;
-    public currentFetchX = 0;
+    public screenX = 0;
     public state = FetcherState.GetTile;
     public readonly bgPixelFifo = new Array<PixelFifoEntry>();
     public readonly objPixelFifo = new Array<PixelFifoEntry>();
@@ -183,7 +183,7 @@ class FetcherData {
         this.lineX = 0;
         this.mapX = 0;
         this.mapY = 0;
-        this.currentFetchX = 0;
+        this.screenX = 0;
         this.state = FetcherState.GetTile;
         this.bgPixelFifo.splice(0);
         this.objPixelFifo.splice(0);
@@ -342,7 +342,7 @@ export class Ppu {
     }
 
     private tickFetcher() {
-        this.fetcherData.mapX = this.fetcherData.currentFetchX + this.scrollX;
+        this.fetcherData.mapX = this.fetcherData.screenX + this.scrollX;
         this.fetcherData.mapY = this.ly + this.scrollY;
 
         const isWindowVisible =
@@ -385,7 +385,7 @@ export class Ppu {
                     this.getBgOrWindowTile();
                 }
 
-                this.fetcherData.currentFetchX += 8;
+                this.fetcherData.screenX += 8;
                 this.fetcherData.state = FetcherState.GetTileDataLow;
 
                 break;
@@ -416,13 +416,12 @@ export class Ppu {
         }
     }
 
-    private updateObjectFifo(x: number, fifoOffset: number) {
+    private updateObjectFifo(screenX: number, fifoOffset: number) {
         const fifo = this.fetcherData.objPixelFifo;
         const objHeight =
             this.lcdControl.objSizeMode === ObjectSizeMode.Large ? 16 : 8;
 
-        // first pad the fifo with transparent pixels so there are at least 8 pixels
-        /*
+        // first pad the fifo with transparent pixels so there are enough pixels
         while (fifo.length < 16) {
             fifo.push({
                 colorIndex: 0,
@@ -430,13 +429,12 @@ export class Ppu {
                 palette: 0,
             });
         }
-        */
 
         const objects = this.fetcherData.objectsOnScanline;
 
         // now check if there's a sprite at the current X. since
         // sprites are sorted by x, it's enough to check and pop the first one
-        while (objects.length > 0 && objects[0].x - OBJECT_WIDTH === x) {
+        while (objects.length > 0 && objects[0].x - OBJECT_WIDTH === screenX) {
             const obj = objects.shift();
 
             if (!obj) {
@@ -474,14 +472,6 @@ export class Ppu {
 
             for (let i = 0; i < 8; ++i) {
                 const index = fifoOffset + i;
-
-                while (index >= fifo.length - 1) {
-                    fifo.push({
-                        colorIndex: 0,
-                        bgPriority: 1,
-                        palette: 0,
-                    });
-                }
 
                 if (fifo[index].colorIndex === 0) {
                     const bitIndex = obj.xFlip ? i : 7 - i;
@@ -535,9 +525,7 @@ export class Ppu {
 
         // TODO "If the current tile is a window tile, the X coordinate for the window tile is used"
         const fetcherX = this.isRenderingWindow
-            ? Math.floor(
-                  (this.fetcherData.currentFetchX - (this.windowX - 7)) / 8,
-              )
+            ? Math.floor((this.fetcherData.screenX - (this.windowX - 7)) / 8)
             : Math.floor(this.fetcherData.mapX / 8) & 0x1f;
 
         // TODO "If the current tile is a window tile, the Y coordinate for the window tile is used"
@@ -585,7 +573,9 @@ export class Ppu {
                 bgPriority: 0,
             });
 
-            this.updateObjectFifo(this.fetcherData.mapX + i, i);
+            // while we're at it, load the sprite tile for that pixel
+            // TODO here
+            this.updateObjectFifo(this.fetcherData.screenX - 8 + i, i);
         }
 
         return true;
