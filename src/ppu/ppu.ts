@@ -385,6 +385,10 @@ export class Ppu {
                     this.getBgOrWindowTile();
                 }
 
+                for (let i = 0; i < 8; ++i) {
+                    this.updateObjectFifo(this.fetcherData.screenX + i, i);
+                }
+
                 this.fetcherData.screenX += 8;
                 this.fetcherData.state = FetcherState.GetTileDataLow;
 
@@ -572,10 +576,6 @@ export class Ppu {
                 palette: 0,
                 bgPriority: 0,
             });
-
-            // while we're at it, load the sprite tile for that pixel
-            // TODO here
-            this.updateObjectFifo(this.fetcherData.screenX - 8 + i, i);
         }
 
         return true;
@@ -584,9 +584,9 @@ export class Ppu {
     private pushPixelToFramebuffer() {
         if (this.fetcherData.bgPixelFifo.length > 8) {
             const bgPixelData = this.fetcherData.bgPixelFifo.shift();
-            const objPixelData = this.fetcherData.objPixelFifo.shift();
 
             if (bgPixelData && this.fetcherData.lineX >= this.scrollX % 8) {
+                const objPixelData = this.fetcherData.objPixelFifo.shift();
                 let colorIndex = bgPixelData.colorIndex;
                 let palette = this.bgPalette;
 
